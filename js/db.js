@@ -58,7 +58,16 @@ export async function aggiornaPianta(id, dati) {
 }
 
 export async function eliminaPianta(id) {
+  // Firestore non cancella le sottocollezioni a cascata: le svuotiamo noi prima.
+  const problemi = await getDocs(collection(assicuraDb(), 'piante', id, 'problemi'));
+  for (const p of problemi.docs) await eliminaProblema(id, p.id);
+  await svuotaCollezione(collection(assicuraDb(), 'piante', id, 'foto'));
   await deleteDoc(doc(assicuraDb(), 'piante', id));
+}
+
+async function svuotaCollezione(rif) {
+  const snap = await getDocs(rif);
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
 
 // ---------- FOTO ----------
@@ -135,6 +144,7 @@ export async function aggiornaProblema(piantaId, problemaId, dati) {
 }
 
 export async function eliminaProblema(piantaId, problemaId) {
+  await svuotaCollezione(collection(assicuraDb(), 'piante', piantaId, 'problemi', problemaId, 'messaggi'));
   await deleteDoc(doc(assicuraDb(), 'piante', piantaId, 'problemi', problemaId));
 }
 

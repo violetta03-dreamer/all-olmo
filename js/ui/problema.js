@@ -1,6 +1,6 @@
 // View "Problema (chat)": conversazione con l'AI su un problema di una pianta specifica.
 
-import { ottieniPianta, osservaProblemi, ottieniProblema, aggiornaProblema, osservaMessaggi, aggiungiMessaggio } from '../db.js';
+import { ottieniPianta, osservaProblemi, ottieniProblema, aggiornaProblema, eliminaProblema, osservaMessaggi, aggiungiMessaggio } from '../db.js';
 import { chiediAI, riassumiConversazione, costruisciContesto } from '../ai.js';
 import { comprimiFoto } from '../foto.js';
 import { vai, mostraErrore, mostraInfo, escapeHtml, formattaOra, registraCleanup, ETICHETTE_STATO } from '../util.js';
@@ -53,6 +53,13 @@ export async function renderProblema(container, piantaId, problemaId) {
       <p class="placeholder">Carico i messaggi…</p>
     </div>
 
+    <p style="text-align:center; margin:0.2rem 0 0.4rem;">
+      <button type="button" id="btn-elimina-problema"
+        style="background:none; border:none; font-size:0.72rem; color:var(--bordo, #b8ab94); text-decoration:underline; padding:0.3rem;">
+        Elimina questa conversazione
+      </button>
+    </p>
+
     <div class="anteprima-foto-allegata" id="anteprima-foto" hidden></div>
 
     <div class="barra-input">
@@ -79,6 +86,21 @@ export async function renderProblema(container, piantaId, problemaId) {
     } catch (errore) {
       mostraErrore('Non sono riuscita a cambiare lo stato: ' + errore.message);
       evento.target.value = vecchioStato;
+    }
+  });
+
+  document.getElementById('btn-elimina-problema').addEventListener('click', async () => {
+    const conferma = prompt(
+      `Stai per eliminare per sempre "${stato.problema.titolo}" con tutta la conversazione e il riassunto. ` +
+        `Non si può annullare. Per confermare scrivi: elimina`
+    );
+    if ((conferma || '').trim().toLowerCase() !== 'elimina') return;
+    try {
+      await eliminaProblema(piantaId, problemaId);
+      mostraInfo('Conversazione eliminata.');
+      vai(`/pianta/${piantaId}`);
+    } catch (errore) {
+      mostraErrore("Non sono riuscita a eliminarla: " + errore.message);
     }
   });
 

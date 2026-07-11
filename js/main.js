@@ -20,7 +20,7 @@ function renderBenvenuto() {
   contenitore.innerHTML = `
     <div class="schermata-centrata">
       <div class="simbolo">🌿</div>
-      <h1>Benvenuta su all'Olmo</h1>
+      <h1>Benvenuta all'Olmo</h1>
       <p>Prima di iniziare serve collegare l'app al tuo progetto Firebase: è un passaggio da fare una volta sola.</p>
       <p>Segui la guida in <strong>SETUP.md</strong>, poi incolla la configurazione in <code>js/firebase-config.js</code> e ricarica questa pagina.</p>
       <a class="btn btn-primario" href="./SETUP.md" target="_blank" rel="noopener" style="margin-top:0.8rem;">Apri la guida SETUP.md</a>
