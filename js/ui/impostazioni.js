@@ -47,7 +47,7 @@ export async function renderImpostazioni(container) {
         </div>
         <div class="campo">
           <label for="ai-gemini-modello">Modello Gemini</label>
-          <input type="text" id="ai-gemini-modello" value="${imp.geminiModello}" placeholder="gemini-2.5-flash" />
+          <input type="text" id="ai-gemini-modello" value="${imp.geminiModello}" placeholder="gemini-flash-latest" />
         </div>
 
         <div class="filo-erbario"></div>

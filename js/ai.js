@@ -5,14 +5,20 @@
 const PREFISSO = 'allolmo.';
 const TIMEOUT_MS = 30000;
 
-const MODELLO_GEMINI_DEFAULT = 'gemini-2.5-flash';
+// Alias "sempreverde" di Google: punta al modello Flash stabile corrente,
+// così non smette di funzionare quando un modello viene pensionato.
+const MODELLO_GEMINI_DEFAULT = 'gemini-flash-latest';
+// Vecchio default salvato nelle impostazioni dei primi giorni: non più disponibile ai nuovi utenti.
+const MODELLI_GEMINI_PENSIONATI = ['gemini-2.5-flash'];
 
 // ---------- Impostazioni (localStorage) ----------
 
 export function leggiImpostazioniAI() {
+  let geminiModello = localStorage.getItem(PREFISSO + 'gemini.modello') || '';
+  if (MODELLI_GEMINI_PENSIONATI.includes(geminiModello)) geminiModello = '';
   return {
     geminiChiave: localStorage.getItem(PREFISSO + 'gemini.chiave') || '',
-    geminiModello: localStorage.getItem(PREFISSO + 'gemini.modello') || MODELLO_GEMINI_DEFAULT,
+    geminiModello: geminiModello || MODELLO_GEMINI_DEFAULT,
     openrouterChiave: localStorage.getItem(PREFISSO + 'openrouter.chiave') || '',
     openrouterModello: localStorage.getItem(PREFISSO + 'openrouter.modello') || '',
     providerPrimario: localStorage.getItem(PREFISSO + 'provider.primario') || 'gemini',
