@@ -116,14 +116,16 @@ export async function chiediAI(messaggi, opzioni = {}) {
   try {
     return await chiamaProvider(primario, messaggi, imp, opzioni);
   } catch (erroreP) {
-    if (imp.usaRiserva) {
-      const secondario = primario === 'gemini' ? 'openrouter' : 'gemini';
+    const secondario = primario === 'gemini' ? 'openrouter' : 'gemini';
+    const secondarioConfigurato =
+      secondario === 'gemini' ? !!imp.geminiChiave : !!(imp.openrouterChiave && imp.openrouterModello);
+    if (imp.usaRiserva && secondarioConfigurato) {
       try {
         return await chiamaProvider(secondario, messaggi, imp, opzioni);
       } catch (erroreS) {
         throw new Error(
-          `Non sono riuscita a contattare né ${nomeProvider(primario)} né ${nomeProvider(secondario)}. ` +
-            `Controlla la connessione e le chiavi API nelle Impostazioni, poi riprova.`
+          `${nomeProvider(primario)}: ${traduciErrore(erroreP, primario)} ` +
+            `Anche la riserva ${nomeProvider(secondario)} ha fallito: ${traduciErrore(erroreS, secondario)}`
         );
       }
     }
