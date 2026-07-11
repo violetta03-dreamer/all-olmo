@@ -56,7 +56,9 @@ self.addEventListener('fetch', (evento) => {
   if (eDaLasciarPassareInRete(url)) return; // network, mai intercettato
 
   evento.respondWith(
-    fetch(richiesta)
+    // cache: 'no-cache' = rivalida sempre col server (ETag): senza questo, la cache HTTP
+    // di GitHub Pages (10 minuti) farebbe arrivare aggiornamenti in ritardo.
+    fetch(richiesta, { cache: 'no-cache' })
       .then((rispostaRete) => {
         const copia = rispostaRete.clone();
         caches.open(NOME_CACHE).then((cache) => cache.put(richiesta, copia)).catch(() => {});
