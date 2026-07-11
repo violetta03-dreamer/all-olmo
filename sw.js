@@ -1,7 +1,8 @@
-// Service worker: cache-first per la shell statica dell'app, sempre in rete per
-// le chiamate ad API esterne (Firebase, Gemini, OpenRouter) che non vanno mai cacheate.
+// Service worker: network-first per la shell statica dell'app (aggiornamenti subito
+// visibili, cache usata solo se offline); mai intercettate le chiamate ad API esterne
+// (Firebase, Gemini, OpenRouter).
 
-const NOME_CACHE = 'allolmo-shell-v1';
+const NOME_CACHE = 'allolmo-shell-v2';
 
 const FILE_SHELL = [
   './',
@@ -55,15 +56,14 @@ self.addEventListener('fetch', (evento) => {
   if (eDaLasciarPassareInRete(url)) return; // network, mai intercettato
 
   evento.respondWith(
-    caches.match(richiesta).then((rispostaCache) => {
-      if (rispostaCache) return rispostaCache;
-      return fetch(richiesta)
-        .then((rispostaRete) => {
-          const copia = rispostaRete.clone();
-          caches.open(NOME_CACHE).then((cache) => cache.put(richiesta, copia)).catch(() => {});
-          return rispostaRete;
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+    fetch(richiesta)
+      .then((rispostaRete) => {
+        const copia = rispostaRete.clone();
+        caches.open(NOME_CACHE).then((cache) => cache.put(richiesta, copia)).catch(() => {});
+        return rispostaRete;
+      })
+      .catch(() =>
+        caches.match(richiesta).then((rispostaCache) => rispostaCache || caches.match('./index.html'))
+      )
   );
 });
