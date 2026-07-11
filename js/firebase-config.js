@@ -1,4 +1,4 @@
-// Config del progetto Firebase — NON è un segreto (la config web di Firebase è pubblica
+﻿// Config del progetto Firebase — NON è un segreto (la config web di Firebase è pubblica
 // per natura: la sicurezza vera è nelle Security Rules di Firestore, vedi SETUP.md).
 //
 // Incolla qui l'oggetto config che trovi in:

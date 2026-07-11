@@ -1,4 +1,4 @@
-# Guida SETUP — all'Olmo
+﻿# Guida SETUP — all'Olmo
 
 Questa guida ti porta, passo per passo, da zero ad avere l'app funzionante sui telefoni. Non serve saper programmare: si tratta soprattutto di copiare e incollare.
 
