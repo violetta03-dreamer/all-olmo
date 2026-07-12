@@ -315,12 +315,42 @@ input, textarea, select {
 
 /* ---------- Scheda pianta ---------- */
 
-.foto-principale {
-  width: 100%;
-  aspect-ratio: 4 / 3;
+/* Testata scheda pianta: foto verticale a sinistra, dati e bottone a destra
+   (niente più foto-copertina a tutta larghezza: sgranava e mangiava lo schermo). */
+.scheda-testata {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.scheda-testata__foto {
+  width: 42%;
+  max-width: 220px;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--bordo);
   background: var(--carta-alta);
-  border-bottom: 1px solid var(--bordo);
+  flex: none;
+}
+
+.scheda-testata__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheda-testata__info h1 {
+  margin: 0 0 0.3rem;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+}
+
+.scheda-testata__nuovo {
+  margin-top: 0.8rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 999px;
 }
 
 .album {

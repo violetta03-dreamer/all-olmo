@@ -69,9 +69,9 @@ Ti viene sempre passato nel contesto: la scheda della pianta (nome, posizione, t
 
 export const PROMPT_RIASSUNTO = `Leggi la conversazione seguente tra una persona e un assistente esperto di piante riguardo un problema su una pianta. Produci ESCLUSIVAMENTE un oggetto JSON valido, senza testo prima o dopo, senza markdown e senza backtick, con esattamente questa struttura:
 
-{"sintomi": "descrizione breve dei sintomi osservati", "ipotesi": [{"nome": "nome ipotesi", "confidenza": "alta|media|bassa", "perche": "perché potrebbe essere questa causa", "confermerebbe": "cosa la confermerebbe", "smentirebbe": "cosa la smentirebbe"}], "azioni": ["azione consigliata 1", "azione consigliata 2"]}
+{"titolo": "il problema in 2-3 parole, minuscole (es. 'sofferenza fogliare', 'cocciniglia sul fusto')", "sintomi": "descrizione breve dei sintomi osservati", "ipotesi": [{"nome": "nome ipotesi", "confidenza": "alta|media|bassa", "perche": "perché potrebbe essere questa causa", "confermerebbe": "cosa la confermerebbe", "smentirebbe": "cosa la smentirebbe"}], "azioni": ["azione consigliata 1", "azione consigliata 2"]}
 
-Se un campo non è emerso dalla conversazione, usa una stringa vuota "" o un array vuoto []. Non aggiungere altri campi oltre a questi tre.`;
+Se un campo non è emerso dalla conversazione, usa una stringa vuota "" o un array vuoto []. Non aggiungere altri campi oltre a questi quattro.`;
 
 // ---------- Costruzione del contesto ----------
 
@@ -163,7 +163,7 @@ export async function riassumiConversazione(messaggi) {
 }
 
 function analizzaJsonRiassunto(testo) {
-  const vuoto = { sintomi: '', ipotesi: [], azioni: [] };
+  const vuoto = { titolo: '', sintomi: '', ipotesi: [], azioni: [] };
   if (!testo) return vuoto;
   const inizio = testo.indexOf('{');
   const fine = testo.lastIndexOf('}');
@@ -171,6 +171,7 @@ function analizzaJsonRiassunto(testo) {
   try {
     const oggetto = JSON.parse(testo.slice(inizio, fine + 1));
     return {
+      titolo: typeof oggetto.titolo === 'string' ? oggetto.titolo.trim() : '',
       sintomi: typeof oggetto.sintomi === 'string' ? oggetto.sintomi : '',
       ipotesi: Array.isArray(oggetto.ipotesi) ? oggetto.ipotesi : [],
       azioni: Array.isArray(oggetto.azioni) ? oggetto.azioni : [],

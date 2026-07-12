@@ -42,16 +42,19 @@ export async function renderPianta(container, piantaId) {
       <button class="link-indietro" id="btn-indietro">‹ Giardino</button>
       <button class="icon-btn" id="btn-modifica" aria-label="Modifica pianta">✎</button>
     </header>
-    <img class="foto-principale" id="foto-principale" src="${pianta.thumb || ''}" alt="${escapeHtml(pianta.nome)}"
-      style="${pianta.thumb ? '' : 'display:none;'}" />
-    <div class="sezione">
-      <h1 id="pianta-nome">${escapeHtml(pianta.nome || '(senza nome)')}</h1>
-      <p id="pianta-posizione" style="color:var(--testo-tenue); margin:0 0 0.5rem;">${escapeHtml(pianta.posizione || '')}</p>
-      <div class="card-pianta__tags" id="pianta-tags">
-        ${(pianta.tags || []).map((t) => `<span class="mini-chip">${escapeHtml(t)}</span>`).join('')}
+    <div class="sezione scheda-testata">
+      <img class="scheda-testata__foto" id="foto-principale" src="${pianta.thumb || ''}" alt="${escapeHtml(pianta.nome)}"
+        style="${pianta.thumb ? '' : 'display:none;'}" />
+      <div class="scheda-testata__info">
+        <h1 id="pianta-nome">${escapeHtml(pianta.nome || '(senza nome)')}</h1>
+        <p id="pianta-posizione" style="color:var(--testo-tenue); margin:0 0 0.5rem;">${escapeHtml(pianta.posizione || '')}</p>
+        <div class="card-pianta__tags" id="pianta-tags">
+          ${(pianta.tags || []).map((t) => `<span class="mini-chip">${escapeHtml(t)}</span>`).join('')}
+        </div>
+        <button class="btn btn-primario scheda-testata__nuovo" id="btn-nuovo-problema">＋ Nuovo problema</button>
       </div>
-      ${pianta.note ? `<p id="pianta-note" style="margin-top:0.7rem;">${escapeHtml(pianta.note)}</p>` : ''}
     </div>
+    ${pianta.note ? `<div class="sezione"><p id="pianta-note" style="margin:0;">${escapeHtml(pianta.note)}</p></div>` : ''}
 
     <div class="sezione">
       <h2 style="font-size:1rem;">Album foto</h2>
@@ -59,11 +62,8 @@ export async function renderPianta(container, piantaId) {
     </div>
 
     <div class="sezione">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="font-size:1rem; margin:0;">Problemi</h2>
-        <button class="btn btn-primario" id="btn-nuovo-problema" style="padding:0.5rem 1rem; font-size:0.9rem;">+ Nuovo problema</button>
-      </div>
-      <div class="elenco-problemi" id="elenco-problemi" style="margin-top:0.7rem;"><p class="placeholder">Carico i problemi…</p></div>
+      <h2 style="font-size:1rem; margin:0;">Storico</h2>
+      <div class="elenco-problemi" id="elenco-problemi" style="margin-top:0.7rem;"><p class="placeholder">Carico lo storico…</p></div>
     </div>
   `;
 
@@ -73,7 +73,16 @@ export async function renderPianta(container, piantaId) {
 
   const unsubFoto = osservaFoto(
     piantaId,
-    (foto) => disegnaAlbum(piantaId, foto),
+    (foto) => {
+      disegnaAlbum(piantaId, foto);
+      // In testata la foto va mostrata in qualità piena (la thumbnail da 220px
+      // sgranerebbe): appena l'album arriva, si passa alla prima foto vera.
+      const fotoPrincipale = document.getElementById('foto-principale');
+      if (fotoPrincipale && foto.length) {
+        fotoPrincipale.src = foto[0].b64;
+        fotoPrincipale.style.display = '';
+      }
+    },
     (errore) => mostraErrore('Non riesco a caricare le foto: ' + errore.message)
   );
   const unsubProblemi = osservaProblemi(
@@ -151,8 +160,8 @@ function disegnaProblemi(piantaId, problemi) {
       (p) => `
       <div class="riga-problema" data-id="${p.id}">
         <button class="riga-problema__apri" data-apri="${p.id}" style="background:none;border:none;text-align:left;flex:1;padding:0;">
+          <div class="riga-problema__data">${formattaData(p.apertoIl)}</div>
           <div class="riga-problema__titolo">${escapeHtml(p.titolo)}</div>
-          <div class="riga-problema__data">Aperto il ${formattaData(p.apertoIl)}</div>
         </button>
         <span class="badge-stato badge-stato--${p.stato}">${ETICHETTE_STATO[p.stato] || p.stato}</span>
         ${
@@ -279,8 +288,8 @@ function apriModaleNuovoProblema(piantaId) {
       <h2>Nuovo problema</h2>
       <form id="form-nuovo-problema">
         <div class="campo">
-          <label for="npr-titolo">Titolo breve</label>
-          <input type="text" id="npr-titolo" required placeholder="es. Foglie che ingialliscono" />
+          <label for="npr-titolo">Titolo breve (facoltativo)</label>
+          <input type="text" id="npr-titolo" placeholder="Se lo lasci vuoto, lo scrive l'AI" />
         </div>
         <button type="submit" class="btn btn-primario btn-blocco">Apri conversazione</button>
         <button type="button" class="btn btn-secondario btn-blocco" id="npr-annulla">Annulla</button>
@@ -300,7 +309,11 @@ function apriModaleNuovoProblema(piantaId) {
     pulsante.disabled = true;
     pulsante.textContent = 'Apro…';
     try {
-      const titolo = overlay.querySelector('#npr-titolo').value.trim();
+      // Titolo provvisorio se lasciato vuoto: il riassunto AI lo sostituirà
+      // col suo "titolo in 2 parole" alla prima diagnosi.
+      const titolo =
+        overlay.querySelector('#npr-titolo').value.trim() ||
+        `Problema del ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`;
       const id = await creaProblema(piantaId, { titolo });
       overlay.remove();
       vai(`/problema/${piantaId}/${id}`);

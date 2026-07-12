@@ -362,8 +362,20 @@ async function generaRiassunto() {
   mostraInfo('Sto aggiornando il riassunto…');
   try {
     const riassunto = await riassumiConversazione(stato.messaggi);
-    await aggiornaProblema(stato.piantaId, stato.problemaId, { riassunto });
+    const aggiornamenti = { riassunto };
+    // Titolo breve automatico: sostituisce il titolo solo se è quello provvisorio
+    // ("Problema del …") o una descrizione lunga; un titolo corto scritto a mano resta suo.
+    const titoloAttuale = stato.problema.titolo || '';
+    if (riassunto.titolo && (titoloAttuale.startsWith('Problema del ') || titoloAttuale.length > 40)) {
+      aggiornamenti.titolo = riassunto.titolo;
+    }
+    await aggiornaProblema(stato.piantaId, stato.problemaId, aggiornamenti);
     stato.problema.riassunto = riassunto;
+    if (aggiornamenti.titolo) {
+      stato.problema.titolo = aggiornamenti.titolo;
+      const titoloEl = document.getElementById('problema-titolo');
+      if (titoloEl) titoloEl.textContent = aggiornamenti.titolo;
+    }
     stato.riassuntoAperto = true;
     disegnaRiassunto();
     mostraInfo('Riassunto aggiornato.');
