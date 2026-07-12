@@ -476,6 +476,41 @@ input, textarea, select {
   font-style: italic;
 }
 
+/* Le bolle AI contengono HTML generato dal mini-parser markdown:
+   qui la spaziatura la danno <p> e liste, non gli a-capo del testo. */
+.bolla--ai {
+  white-space: normal;
+}
+
+.bolla--ai p {
+  margin: 0 0 0.5em;
+}
+
+.bolla--ai p:last-of-type {
+  margin-bottom: 0;
+}
+
+.bolla--ai ul,
+.bolla--ai ol {
+  margin: 0 0 0.5em;
+  padding-left: 1.2em;
+}
+
+.bolla--ai li {
+  margin-bottom: 0.25em;
+}
+
+.chat-azioni {
+  display: flex;
+  justify-content: center;
+  padding: 0.2rem 1.1rem 0.4rem;
+}
+
+.chat-azioni .btn {
+  font-size: 0.85rem;
+  padding: 0.45rem 1rem;
+}
+
 .barra-input {
   position: sticky;
   bottom: 0;

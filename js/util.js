@@ -32,6 +32,55 @@ export function escapeHtml(testo) {
   return div.innerHTML;
 }
 
+// Mini-parser markdown per le risposte dell'AI: grassetto, corsivo, elenchi
+// puntati e numerati. Fatto in casa apposta (niente librerie). Il testo viene
+// prima passato da escapeHtml, quindi il risultato è sicuro da inserire nel DOM.
+export function markdownAHtml(testo) {
+  const righe = escapeHtml(testo).split('\n');
+  const html = [];
+  let listaAperta = null; // 'ul' | 'ol' | null
+
+  const chiudiLista = () => {
+    if (listaAperta) {
+      html.push(`</${listaAperta}>`);
+      listaAperta = null;
+    }
+  };
+
+  for (const riga of righe) {
+    const r = riga.trim();
+    const puntato = r.match(/^[-*•]\s+(.+)/);
+    const numerato = r.match(/^\d+[.)]\s+(.+)/);
+    const titolo = r.match(/^#{1,6}\s+(.+)/);
+
+    if (puntato || numerato) {
+      const tipo = puntato ? 'ul' : 'ol';
+      if (listaAperta !== tipo) {
+        chiudiLista();
+        html.push(`<${tipo}>`);
+        listaAperta = tipo;
+      }
+      html.push(`<li>${markdownInline(puntato ? puntato[1] : numerato[1])}</li>`);
+    } else if (r === '') {
+      chiudiLista();
+    } else if (titolo) {
+      chiudiLista();
+      html.push(`<p><strong>${markdownInline(titolo[1])}</strong></p>`);
+    } else {
+      chiudiLista();
+      html.push(`<p>${markdownInline(r)}</p>`);
+    }
+  }
+  chiudiLista();
+  return html.join('');
+}
+
+function markdownInline(testo) {
+  return testo
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+
 export function formattaData(timestamp) {
   if (!timestamp) return '';
   const data = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);

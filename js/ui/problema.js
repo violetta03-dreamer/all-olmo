@@ -3,7 +3,11 @@
 import { ottieniPianta, osservaProblemi, ottieniProblema, aggiornaProblema, eliminaProblema, osservaMessaggi, aggiungiMessaggio } from '../db.js';
 import { chiediAI, riassumiConversazione, costruisciContesto } from '../ai.js';
 import { comprimiFoto } from '../foto.js';
-import { vai, mostraErrore, mostraInfo, escapeHtml, formattaOra, registraCleanup, ETICHETTE_STATO } from '../util.js';
+import { vai, mostraErrore, mostraInfo, escapeHtml, markdownAHtml, formattaOra, registraCleanup, ETICHETTE_STATO } from '../util.js';
+
+// Testo inviato dal bottone "Chiedi la diagnosi": dice al modello di smettere
+// di fare domande e tirare le somme (la fase 2 del prompt lo prevede).
+const TESTO_CHIEDI_DIAGNOSI = 'Tira le somme: dammi la tua diagnosi con le informazioni che hai.';
 
 let stato = {}; // stato locale della view corrente
 
@@ -62,6 +66,10 @@ export async function renderProblema(container, piantaId, problemaId) {
 
     <div class="anteprima-foto-allegata" id="anteprima-foto" hidden></div>
 
+    <div class="chat-azioni" id="chat-azioni" hidden>
+      <button type="button" class="btn btn-secondario" id="btn-chiedi-diagnosi" title="Basta domande: l'AI tira le somme con quello che sa">Chiedi la diagnosi</button>
+    </div>
+
     <div class="barra-input">
       <button class="icon-btn" id="btn-allega-foto" aria-label="Allega foto" title="Allega una foto">📷</button>
       <textarea id="input-messaggio" rows="1" placeholder="Scrivi qui…"></textarea>
@@ -106,6 +114,7 @@ export async function renderProblema(container, piantaId, problemaId) {
 
   document.getElementById('btn-allega-foto').addEventListener('click', gestisciAllegaFoto);
   document.getElementById('btn-invia').addEventListener('click', inviaMessaggio);
+  document.getElementById('btn-chiedi-diagnosi').addEventListener('click', () => inviaTesto(TESTO_CHIEDI_DIAGNOSI, null));
   const textarea = document.getElementById('input-messaggio');
   textarea.addEventListener('keydown', (evento) => {
     if (evento.key === 'Enter' && !evento.shiftKey) {
@@ -201,6 +210,8 @@ function disegnaConversazione() {
   const contenitore = document.getElementById('conversazione');
   if (!contenitore) return;
 
+  aggiornaBottoneDiagnosi();
+
   if (stato.messaggi.length === 0 && !stato.elaborando) {
     contenitore.innerHTML = `<p class="placeholder">Racconta cosa hai notato: da lì si parte.</p>`;
     return;
@@ -211,7 +222,7 @@ function disegnaConversazione() {
       .map(
         (m) => `
       <div class="bolla bolla--${m.ruolo === 'utente' ? 'utente' : 'ai'}">
-        ${m.testo ? escapeHtml(m.testo) : ''}
+        ${m.testo ? (m.ruolo === 'ai' ? markdownAHtml(m.testo) : escapeHtml(m.testo)) : ''}
         ${m.fotoB64 ? `<img class="bolla__foto" src="${m.fotoB64}" alt="foto allegata" />` : ''}
         <div style="font-size:0.68rem; opacity:0.65; margin-top:0.3rem;">${formattaOra(m.ts)}</div>
       </div>`
@@ -219,6 +230,16 @@ function disegnaConversazione() {
       .join('') + (stato.elaborando ? `<div class="bolla bolla--pensando">Sto pensando…</div>` : '');
 
   contenitore.scrollTop = contenitore.scrollHeight;
+}
+
+// Il bottone "Chiedi la diagnosi" compare solo quando c'è una conversazione
+// avviata (almeno un messaggio dell'utente) e non stiamo già aspettando l'AI.
+function aggiornaBottoneDiagnosi() {
+  const riga = document.getElementById('chat-azioni');
+  const bottone = document.getElementById('btn-chiedi-diagnosi');
+  if (!riga || !bottone) return;
+  riga.hidden = !stato.messaggi.some((m) => m.ruolo === 'utente');
+  bottone.disabled = stato.elaborando;
 }
 
 function modificaTitolo() {
@@ -299,6 +320,12 @@ async function inviaMessaggio() {
     anteprima.hidden = true;
     anteprima.innerHTML = '';
   }
+
+  await inviaTesto(testo, fotoDaInviare);
+}
+
+async function inviaTesto(testo, fotoDaInviare) {
+  if (stato.elaborando) return;
 
   try {
     await aggiungiMessaggio(stato.piantaId, stato.problemaId, { ruolo: 'utente', testo, fotoB64: fotoDaInviare });
