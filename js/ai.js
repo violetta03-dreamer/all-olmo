@@ -73,6 +73,74 @@ export const PROMPT_RIASSUNTO = `Leggi la conversazione seguente tra una persona
 
 Se un campo non è emerso dalla conversazione, usa una stringa vuota "" o un array vuoto []. Non aggiungere altri campi oltre a questi quattro.`;
 
+// ---------- Scheda di cura ----------
+
+// Campi fissi della scheda di cura: [chiave, etichetta mostrata].
+export const CAMPI_CURA = [
+  ['annaffiatura', 'Annaffiatura'],
+  ['luce', 'Luce ed esposizione'],
+  ['temperatura', 'Temperatura'],
+  ['terreno', 'Terreno e rinvaso'],
+  ['concimazione', 'Concimazione'],
+  ['avvertenze', 'Avvertenze'],
+];
+
+const PROMPT_CURA_GENERA = `Sei un assistente esperto di piante. Ti viene indicata una pianta: produci una scheda di CURA GENERALE della specie (non una diagnosi), prudente e onesta. Se dal nome non capisci con certezza la specie, dillo nel campo "avvertenze" e limita i consigli a ciò che è ragionevole. Non inventare esigenze specifiche di cultivar che non conosci.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo, senza markdown e senza backtick, con esattamente queste chiavi (stringhe semplici, 1-3 frasi ciascuna, italiano):
+
+{"annaffiatura": "", "luce": "", "temperatura": "", "terreno": "", "concimazione": "", "avvertenze": ""}
+
+Se per un campo non hai indicazioni affidabili, lascia la stringa vuota. In "avvertenze" metti gli errori più comuni da evitare per questa pianta.`;
+
+const PROMPT_CURA_STRUTTURA = `Sei un assistente che struttura appunti sulla cura di una pianta. Ti viene fornito un testo (copiato da un sito, un libro o scritto a mano): riorganizza SOLO le informazioni presenti nel testo nei campi della scheda. NON aggiungere nulla di tuo, non integrare con conoscenze esterne, non inventare. Ciò che nel testo non c'è resta stringa vuota.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo, senza markdown e senza backtick, con esattamente queste chiavi (stringhe semplici, italiano):
+
+{"annaffiatura": "", "luce": "", "temperatura": "", "terreno": "", "concimazione": "", "avvertenze": ""}`;
+
+/**
+ * Genera (o struttura da testo incollato) una scheda di cura.
+ * Ritorna un oggetto con le chiavi di CAMPI_CURA; i campi non riempiti sono ''.
+ */
+export async function generaSchedaCura(pianta, testoIncollato = null) {
+  const descrizionePianta = [
+    `Pianta: ${pianta?.nome || '(senza nome)'}`,
+    pianta?.posizione ? `Posizione: ${pianta.posizione}` : '',
+    (pianta?.tags || []).length ? `Tag: ${pianta.tags.join(', ')}` : '',
+    pianta?.note ? `Note: ${pianta.note}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const richiesta = testoIncollato
+    ? `${descrizionePianta}\n\nTesto da strutturare:\n\n${testoIncollato}`
+    : descrizionePianta;
+
+  const rispostaGrezza = await chiediAI([{ ruolo: 'utente', testo: richiesta }], {
+    systemPrompt: testoIncollato ? PROMPT_CURA_STRUTTURA : PROMPT_CURA_GENERA,
+  });
+
+  return analizzaJsonCura(rispostaGrezza);
+}
+
+function analizzaJsonCura(testo) {
+  const scheda = Object.fromEntries(CAMPI_CURA.map(([chiave]) => [chiave, '']));
+  if (!testo) return scheda;
+  const inizio = testo.indexOf('{');
+  const fine = testo.lastIndexOf('}');
+  if (inizio === -1 || fine === -1 || fine < inizio) return scheda;
+  try {
+    const oggetto = JSON.parse(testo.slice(inizio, fine + 1));
+    for (const [chiave] of CAMPI_CURA) {
+      if (typeof oggetto[chiave] === 'string') scheda[chiave] = oggetto[chiave].trim();
+    }
+  } catch {
+    // JSON illeggibile: si torna la scheda vuota, la view avvisa.
+  }
+  return scheda;
+}
+
 // ---------- Costruzione del contesto ----------
 
 /** Costruisce il messaggio di contesto (scheda pianta + storico problemi + data) da anteporre alla conversazione. */

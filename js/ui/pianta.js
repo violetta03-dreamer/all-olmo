@@ -12,6 +12,7 @@ import {
   aggiornaProblema,
 } from '../db.js';
 import { comprimiFoto, thumbnailDaDataUrl } from '../foto.js';
+import { generaSchedaCura, CAMPI_CURA } from '../ai.js';
 import {
   vai,
   mostraErrore,
@@ -65,11 +66,18 @@ export async function renderPianta(container, piantaId) {
       <h2 style="font-size:1rem; margin:0;">Storico</h2>
       <div class="elenco-problemi" id="elenco-problemi" style="margin-top:0.7rem;"><p class="placeholder">Carico lo storico…</p></div>
     </div>
+
+    <div class="sezione">
+      <h2 style="font-size:1rem; margin:0;">Scheda di cura</h2>
+      <div id="scheda-cura" style="margin-top:0.7rem;"></div>
+    </div>
   `;
 
   document.getElementById('btn-indietro').addEventListener('click', () => vai('/'));
   document.getElementById('btn-modifica').addEventListener('click', () => apriModaleModificaPianta(pianta));
   document.getElementById('btn-nuovo-problema').addEventListener('click', () => apriModaleNuovoProblema(piantaId));
+
+  disegnaSchedaCura(pianta);
 
   const unsubFoto = osservaFoto(
     piantaId,
@@ -188,6 +196,152 @@ function disegnaProblemi(piantaId, problemi) {
         mostraErrore('Non sono riuscita a riaprire il problema: ' + errore.message);
       }
     });
+  });
+}
+
+// ---------- Scheda di cura ----------
+
+function disegnaSchedaCura(pianta) {
+  const contenitore = document.getElementById('scheda-cura');
+  if (!contenitore) return;
+  const cura = pianta.cura;
+
+  const bottoni = (primaVolta) => `
+    <div class="cura-azioni">
+      ${primaVolta ? '' : `<button class="btn btn-secondario" id="cura-modifica">Modifica</button>`}
+      ${primaVolta ? `<button class="btn btn-secondario" id="cura-mano">Scrivi a mano</button>` : ''}
+      <button class="btn btn-secondario" id="cura-genera">${primaVolta ? 'Genera con AI' : 'Rigenera con AI'}</button>
+      <button class="btn btn-secondario" id="cura-incolla">Incolla un testo</button>
+    </div>`;
+
+  if (!cura) {
+    contenitore.innerHTML = `
+      <p class="placeholder" style="margin-bottom:0.6rem;">Indicazioni generali per la cura di questa pianta (non una diagnosi). Puoi farla scrivere all'AI, incollare un testo da strutturare, o scriverla tu.</p>
+      ${bottoni(true)}`;
+  } else {
+    const campiPieni = CAMPI_CURA.filter(([chiave]) => cura[chiave]);
+    contenitore.innerHTML = `
+      <div class="cura-scheda">
+        ${campiPieni
+          .map(
+            ([chiave, etichetta]) => `
+          <p class="cura-scheda__campo"><strong>${etichetta}:</strong> ${escapeHtml(cura[chiave])}</p>`
+          )
+          .join('')}
+        ${
+          cura.fonte && /^https?:\/\//i.test(cura.fonte)
+            ? `<p class="cura-scheda__campo"><strong>Fonte:</strong> <a href="${escapeHtml(cura.fonte)}" target="_blank" rel="noopener">${escapeHtml(cura.fonte)}</a></p>`
+            : ''
+        }
+        ${cura.aggiornataIl ? `<p class="cura-scheda__aggiornata">Aggiornata il ${formattaData(cura.aggiornataIl)}</p>` : ''}
+      </div>
+      ${bottoni(false)}`;
+  }
+
+  const btnModifica = document.getElementById('cura-modifica');
+  const btnMano = document.getElementById('cura-mano');
+  if (btnModifica) btnModifica.addEventListener('click', () => apriModaleCura(pianta, pianta.cura || {}));
+  if (btnMano) btnMano.addEventListener('click', () => apriModaleCura(pianta, {}));
+  document.getElementById('cura-genera').addEventListener('click', () => generaCuraConAI(pianta, null));
+  document.getElementById('cura-incolla').addEventListener('click', () => apriModaleIncollaTesto(pianta));
+}
+
+async function generaCuraConAI(pianta, testoIncollato) {
+  mostraInfo(testoIncollato ? 'Sto strutturando il testo…' : 'Sto preparando la scheda…');
+  try {
+    const scheda = await generaSchedaCura(pianta, testoIncollato);
+    if (!CAMPI_CURA.some(([chiave]) => scheda[chiave])) {
+      mostraErrore("L'AI non ha prodotto una scheda leggibile. Riprova, o scrivila a mano.");
+      return;
+    }
+    // La scheda NON si salva da sola: appare nel modulo e la salvi tu (giudizio umano sempre in mezzo).
+    apriModaleCura(pianta, { ...scheda, fonte: pianta.cura?.fonte || '' });
+  } catch (errore) {
+    mostraErrore('Non sono riuscita a preparare la scheda: ' + errore.message);
+  }
+}
+
+function apriModaleIncollaTesto(pianta) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="foglio">
+      <h2>Incolla un testo</h2>
+      <p style="font-size:0.88rem; color:var(--testo-tenue);">Incolla qui le indicazioni di cura (da un sito, un libro, appunti): l'AI le riordina nei campi della scheda, senza aggiungere nulla di suo. Poi le rivedi e salvi tu.</p>
+      <form id="form-incolla-cura">
+        <div class="campo">
+          <textarea id="ic-testo" rows="8" required placeholder="Incolla qui il testo…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primario btn-blocco">Struttura nei campi</button>
+        <button type="button" class="btn btn-secondario btn-blocco" id="ic-annulla">Annulla</button>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#ic-annulla').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  overlay.querySelector('#form-incolla-cura').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const testo = overlay.querySelector('#ic-testo').value.trim();
+    if (!testo) return;
+    overlay.remove();
+    generaCuraConAI(pianta, testo);
+  });
+}
+
+function apriModaleCura(pianta, valori) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="foglio">
+      <h2>Scheda di cura</h2>
+      <form id="form-cura">
+        ${CAMPI_CURA.map(
+          ([chiave, etichetta]) => `
+        <div class="campo">
+          <label for="cura-${chiave}">${etichetta}</label>
+          <textarea id="cura-${chiave}" rows="2">${escapeHtml(valori[chiave] || '')}</textarea>
+        </div>`
+        ).join('')}
+        <div class="campo">
+          <label for="cura-fonte">Link fonte (facoltativo)</label>
+          <input type="url" id="cura-fonte" placeholder="https://…" value="${escapeHtml(valori.fonte || '')}" />
+        </div>
+        <button type="submit" class="btn btn-primario btn-blocco">Salva scheda</button>
+        <button type="button" class="btn btn-secondario btn-blocco" id="cura-annulla">Annulla</button>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#cura-annulla').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  overlay.querySelector('#form-cura').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const pulsante = evento.target.querySelector('button[type="submit"]');
+    pulsante.disabled = true;
+    pulsante.textContent = 'Salvo…';
+    const cura = { aggiornataIl: Date.now() };
+    for (const [chiave] of CAMPI_CURA) {
+      cura[chiave] = overlay.querySelector(`#cura-${chiave}`).value.trim();
+    }
+    cura.fonte = overlay.querySelector('#cura-fonte').value.trim();
+    try {
+      await aggiornaPianta(pianta.id, { cura });
+      pianta.cura = cura;
+      overlay.remove();
+      disegnaSchedaCura(pianta);
+      mostraInfo('Scheda di cura salvata.');
+    } catch (errore) {
+      pulsante.disabled = false;
+      pulsante.textContent = 'Salva scheda';
+      mostraErrore('Non sono riuscita a salvare la scheda: ' + errore.message);
+    }
   });
 }
 
