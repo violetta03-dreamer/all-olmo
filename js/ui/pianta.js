@@ -425,7 +425,9 @@ function apriModaleModificaPianta(pianta) {
         tags: [...tagScelti],
       });
       overlay.remove();
-      vai(`/pianta/${pianta.id}`);
+      // Siamo già su #/pianta/<id>: vai() non farebbe scattare hashchange e la
+      // pagina resterebbe coi dati vecchi. Il router va svegliato a mano.
+      window.dispatchEvent(new Event('hashchange'));
     } catch (errore) {
       pulsante.disabled = false;
       pulsante.textContent = 'Salva modifiche';
