@@ -5,14 +5,24 @@ export async function comprimiFoto(file) {
   return caricaEComprimi(file, { maxDim: 1600, qualitaIniziale: 0.78, targetByte: 190 * 1024, minQualita: 0.35 });
 }
 
+// Le card della griglia arrivano a ~500px reali sugli schermi ad alta densità:
+// sotto i 480px la copertina sgrana.
+const OPZIONI_THUMB = { maxDim: 480, qualitaIniziale: 0.75, targetByte: 70 * 1024, minQualita: 0.5 };
+
 export async function generaThumbnail(file) {
-  return caricaEComprimi(file, { maxDim: 220, qualitaIniziale: 0.6, targetByte: 25 * 1024, minQualita: 0.3 });
+  return caricaEComprimi(file, OPZIONI_THUMB);
 }
 
 /** Genera una thumbnail a partire da un data-URL già esistente (es. da una foto già compressa). */
 export async function thumbnailDaDataUrl(dataUrl, opzioni = {}) {
   const img = await caricaImmagineDaUrl(dataUrl);
-  return comprimiCanvas(img, { maxDim: 220, qualitaIniziale: 0.6, targetByte: 25 * 1024, minQualita: 0.3, ...opzioni });
+  return comprimiCanvas(img, { ...OPZIONI_THUMB, ...opzioni });
+}
+
+/** Lato maggiore di un'immagine data-URL (per riconoscere le thumbnail di vecchia generazione). */
+export async function latoMaggioreImmagine(dataUrl) {
+  const img = await caricaImmagineDaUrl(dataUrl);
+  return Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
 }
 
 async function caricaEComprimi(file, opzioni) {

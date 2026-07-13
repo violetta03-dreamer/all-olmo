@@ -11,7 +11,7 @@ import {
   creaProblema,
   aggiornaProblema,
 } from '../db.js';
-import { comprimiFoto, thumbnailDaDataUrl } from '../foto.js';
+import { comprimiFoto, thumbnailDaDataUrl, latoMaggioreImmagine } from '../foto.js';
 import { generaSchedaCura, CAMPI_CURA } from '../ai.js';
 import {
   vai,
@@ -79,16 +79,24 @@ export async function renderPianta(container, piantaId) {
 
   disegnaSchedaCura(pianta);
 
+  let thumbControllata = false;
   const unsubFoto = osservaFoto(
     piantaId,
     (foto) => {
       disegnaAlbum(piantaId, foto);
-      // In testata la foto va mostrata in qualità piena (la thumbnail da 220px
+      // In testata la foto va mostrata in qualità piena (la thumbnail
       // sgranerebbe): appena l'album arriva, si passa alla prima foto vera.
       const fotoPrincipale = document.getElementById('foto-principale');
       if (fotoPrincipale && foto.length) {
         fotoPrincipale.src = foto[0].b64;
         fotoPrincipale.style.display = '';
+      }
+      // Le copertine di vecchia generazione (220px) sgranavano nella griglia
+      // del giardino: alla prima apertura della scheda si rigenerano dalla
+      // foto di copertina, una volta sola.
+      if (!thumbControllata && foto.length && pianta.thumb) {
+        thumbControllata = true;
+        rinfrescaThumbSeVecchia(piantaId, pianta.thumb, foto[0].b64);
       }
     },
     (errore) => mostraErrore('Non riesco a caricare le foto: ' + errore.message)
@@ -103,6 +111,16 @@ export async function renderPianta(container, piantaId) {
     unsubFoto();
     unsubProblemi();
   });
+}
+
+async function rinfrescaThumbSeVecchia(piantaId, thumbAttuale, fotoB64) {
+  try {
+    if ((await latoMaggioreImmagine(thumbAttuale)) >= 300) return;
+    const thumb = await thumbnailDaDataUrl(fotoB64);
+    await aggiornaPianta(piantaId, { thumb });
+  } catch {
+    // Non bloccante: la copertina vecchia resta finché non riesce la rigenerazione.
+  }
 }
 
 function disegnaAlbum(piantaId, foto) {
