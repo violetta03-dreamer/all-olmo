@@ -378,7 +378,7 @@ async function erroreHttpLeggibile(risposta, provider) {
     return `Chiave ${nomeProvider(provider)} non valida o senza permessi. Controllala nelle Impostazioni.`;
   }
   if (risposta.status === 429) {
-    return `${nomeProvider(provider)} ha raggiunto il limite di richieste. Riprova tra poco.`;
+    return `${nomeProvider(provider)} ha raggiunto il limite di richieste. Riprova tra poco.${dettaglio ? ' Dettaglio: ' + dettaglio : ''}`;
   }
   return `${nomeProvider(provider)} ha risposto con un errore (${risposta.status}).${dettaglio ? ' ' + dettaglio : ''}`;
 }
