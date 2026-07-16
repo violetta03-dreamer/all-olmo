@@ -3,6 +3,7 @@
 import { ottieniPianta, osservaProblemi, ottieniProblema, aggiornaProblema, eliminaProblema, osservaMessaggi, aggiungiMessaggio } from '../db.js';
 import { chiediAI, riassumiConversazione, costruisciContesto } from '../ai.js';
 import { comprimiFoto } from '../foto.js';
+import { apriSceltaFoto } from './scegli-foto.js';
 import { vai, mostraErrore, mostraInfo, escapeHtml, markdownAHtml, formattaOra, registraCleanup, ETICHETTE_STATO } from '../util.js';
 
 // Testo inviato dal bottone "Chiedi la diagnosi": dice al modello di smettere
@@ -281,13 +282,7 @@ function modificaTitolo() {
 }
 
 function gestisciAllegaFoto() {
-  // Senza "capture" il telefono chiede da solo: fotocamera o galleria.
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.addEventListener('change', async () => {
-    const file = input.files[0];
-    if (!file) return;
+  apriSceltaFoto(async (file) => {
     try {
       stato.fotoAllegata = await comprimiFoto(file);
       const anteprima = document.getElementById('anteprima-foto');
@@ -302,7 +297,6 @@ function gestisciAllegaFoto() {
       mostraErrore('Non sono riuscita a leggere la foto: ' + errore.message);
     }
   });
-  input.click();
 }
 
 async function inviaMessaggio() {

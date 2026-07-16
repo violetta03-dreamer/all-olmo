@@ -5,6 +5,7 @@
 import { osservaPiante, osservaProblemaAttivo, creaPianta } from '../db.js';
 import { comprimiFoto, generaThumbnail } from '../foto.js';
 import { apriIdentificazione } from './identifica.js';
+import { apriSceltaFoto } from './scegli-foto.js';
 import { vai, mostraErrore, mostraInfo, escapeHtml, registraCleanup, TAG_SUGGERITI } from '../util.js';
 
 let tagAttivo = null;
@@ -175,8 +176,9 @@ function apriModaleNuovaPianta() {
           <textarea id="np-note" placeholder="Tutto ciò che è utile ricordare"></textarea>
         </div>
         <div class="campo">
-          <label for="np-foto">Foto — scattala o scegli dalla galleria (facoltativa)</label>
-          <input type="file" id="np-foto" accept="image/*" />
+          <label>Foto (facoltativa)</label>
+          <button type="button" class="btn btn-secondario btn-blocco" id="np-foto-btn" style="margin-top:0;">📷 Aggiungi una foto</button>
+          <div class="anteprima-foto-allegata" id="np-anteprima" hidden style="padding:0.5rem 0 0;"></div>
           <button type="button" class="btn btn-secondario btn-blocco" id="np-identifica" hidden>🔍 Che pianta è?</button>
         </div>
         <button type="submit" class="btn btn-primario btn-blocco">Aggiungi al giardino</button>
@@ -202,19 +204,29 @@ function apriModaleNuovaPianta() {
     });
   });
 
+  // Foto: la scelta fotocamera/galleria la offre l'app (il photo picker di
+  // Android da solo mostrerebbe soltanto la galleria).
+  let fileFoto = null;
+  const btnFoto = overlay.querySelector('#np-foto-btn');
+  const anteprimaFoto = overlay.querySelector('#np-anteprima');
+  const btnIdentifica = overlay.querySelector('#np-identifica');
+  btnFoto.addEventListener('click', () => {
+    apriSceltaFoto((file) => {
+      fileFoto = file;
+      anteprimaFoto.hidden = false;
+      anteprimaFoto.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="anteprima" /> <span>Foto pronta</span>`;
+      btnFoto.textContent = '📷 Cambia foto';
+      btnIdentifica.hidden = false;
+    });
+  });
+
   // "Che pianta è?": compare appena c'è una foto, propone 2-3 candidate e
   // precompila il nome (che resta modificabile: l'ultima parola è di chi salva).
-  const inputFoto = overlay.querySelector('#np-foto');
-  const btnIdentifica = overlay.querySelector('#np-identifica');
-  inputFoto.addEventListener('change', () => {
-    btnIdentifica.hidden = !inputFoto.files[0];
-  });
   btnIdentifica.addEventListener('click', async () => {
-    const file = inputFoto.files[0];
-    if (!file) return;
+    if (!fileFoto) return;
     btnIdentifica.disabled = true;
     try {
-      const b64 = await comprimiFoto(file);
+      const b64 = await comprimiFoto(fileFoto);
       apriIdentificazione(b64, (candidata) => {
         const campoNome = overlay.querySelector('#np-nome');
         campoNome.value = candidata.nome;
@@ -241,7 +253,6 @@ function apriModaleNuovaPianta() {
       const nome = overlay.querySelector('#np-nome').value.trim();
       const posizione = overlay.querySelector('#np-posizione').value.trim();
       const note = overlay.querySelector('#np-note').value.trim();
-      const fileFoto = overlay.querySelector('#np-foto').files[0];
 
       let thumb = '';
       if (fileFoto) {

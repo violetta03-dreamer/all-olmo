@@ -14,6 +14,7 @@ import {
 import { comprimiFoto, thumbnailDaDataUrl, latoMaggioreImmagine } from '../foto.js';
 import { generaSchedaCura, CAMPI_CURA } from '../ai.js';
 import { apriIdentificazione } from './identifica.js';
+import { apriSceltaFoto } from './scegli-foto.js';
 import {
   vai,
   mostraErrore,
@@ -134,13 +135,7 @@ function disegnaAlbum(pianta, foto) {
     foto.map((f) => `<img class="album__foto" src="${f.b64}" alt="${escapeHtml(f.didascalia || 'foto pianta')}" data-id="${f.id}" />`).join('');
 
   document.getElementById('album-aggiungi').addEventListener('click', () => {
-    // Senza "capture" il telefono chiede da solo: fotocamera o galleria.
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.addEventListener('change', async () => {
-      const file = input.files[0];
-      if (!file) return;
+    apriSceltaFoto(async (file) => {
       mostraInfo('Sto comprimendo la foto…');
       try {
         const b64 = await comprimiFoto(file);
@@ -162,7 +157,6 @@ function disegnaAlbum(pianta, foto) {
         mostraErrore('Non sono riuscita a salvare la foto: ' + errore.message);
       }
     });
-    input.click();
   });
 
   contenitore.querySelectorAll('.album__foto').forEach((img) => {
