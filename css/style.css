@@ -255,6 +255,36 @@ input, textarea, select {
   color: var(--testo-tenue);
 }
 
+/* Sezione "Da tenere d'occhio": piante con problemi aperti, in cima alla griglia. */
+
+.titolo-problematiche {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--inchiostro);
+  margin: 0 0 0.6rem;
+  padding: 0 1.1rem;
+}
+
+.titolo-problematiche::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--stato-peggiorato);
+  flex: none;
+}
+
+.griglia-piante--problematiche { padding-bottom: 0.5rem; }
+
+.divisore-problematiche {
+  border-top: 1px solid var(--bordo);
+  margin: 0.2rem 1.1rem 1.1rem;
+}
+
 .badge-problema {
   position: absolute;
   top: 8px;
@@ -612,6 +642,100 @@ input, textarea, select {
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--bordo);
+}
+
+/* ---------- Identificazione "Che pianta è?" / azioni foto ---------- */
+
+.identifica-testata {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  margin-bottom: 0.8rem;
+}
+
+.identifica-foto {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--bordo);
+  flex: none;
+}
+
+.identifica-attesa {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--testo-tenue);
+}
+
+.candidata {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--carta-alta);
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.6rem;
+}
+
+.candidata__riga {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.candidata__nome {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--inchiostro);
+}
+
+.candidata__scientifico {
+  font-style: italic;
+  font-size: 0.82rem;
+  color: var(--testo-tenue);
+  margin-top: 0.1rem;
+}
+
+.candidata__dettaglio {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--testo);
+}
+
+.badge-confidenza {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  color: white;
+  white-space: nowrap;
+  flex: none;
+}
+
+.badge-confidenza--alta { background: var(--stato-risolto); }
+.badge-confidenza--media { background: var(--stato-in-corso); }
+.badge-confidenza--bassa,
+.badge-confidenza--na { background: var(--stato-abbandonato); }
+
+.identifica-nota {
+  font-size: 0.85rem;
+  color: var(--testo-tenue);
+  margin: 0.2rem 0 0.6rem;
+}
+
+.azioni-foto__anteprima {
+  width: 100%;
+  max-height: 45vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--bordo);
+  background: var(--carta-alta);
+  display: block;
+  margin-bottom: 0.5rem;
 }
 
 /* ---------- Toast ---------- */

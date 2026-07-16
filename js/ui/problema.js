@@ -281,10 +281,10 @@ function modificaTitolo() {
 }
 
 function gestisciAllegaFoto() {
+  // Senza "capture" il telefono chiede da solo: fotocamera o galleria.
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.capture = 'environment';
   input.addEventListener('change', async () => {
     const file = input.files[0];
     if (!file) return;

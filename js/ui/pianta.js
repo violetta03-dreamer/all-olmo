@@ -13,6 +13,7 @@ import {
 } from '../db.js';
 import { comprimiFoto, thumbnailDaDataUrl, latoMaggioreImmagine } from '../foto.js';
 import { generaSchedaCura, CAMPI_CURA } from '../ai.js';
+import { apriIdentificazione } from './identifica.js';
 import {
   vai,
   mostraErrore,
@@ -83,7 +84,7 @@ export async function renderPianta(container, piantaId) {
   const unsubFoto = osservaFoto(
     piantaId,
     (foto) => {
-      disegnaAlbum(piantaId, foto);
+      disegnaAlbum(pianta, foto);
       // In testata la foto va mostrata in qualità piena (la thumbnail
       // sgranerebbe): appena l'album arriva, si passa alla prima foto vera.
       const fotoPrincipale = document.getElementById('foto-principale');
@@ -123,7 +124,8 @@ async function rinfrescaThumbSeVecchia(piantaId, thumbAttuale, fotoB64) {
   }
 }
 
-function disegnaAlbum(piantaId, foto) {
+function disegnaAlbum(pianta, foto) {
+  const piantaId = pianta.id;
   const contenitore = document.getElementById('album');
   if (!contenitore) return;
 
@@ -132,10 +134,10 @@ function disegnaAlbum(piantaId, foto) {
     foto.map((f) => `<img class="album__foto" src="${f.b64}" alt="${escapeHtml(f.didascalia || 'foto pianta')}" data-id="${f.id}" />`).join('');
 
   document.getElementById('album-aggiungi').addEventListener('click', () => {
+    // Senza "capture" il telefono chiede da solo: fotocamera o galleria.
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.capture = 'environment';
     input.addEventListener('change', async () => {
       const file = input.files[0];
       if (!file) return;
@@ -164,11 +166,42 @@ function disegnaAlbum(piantaId, foto) {
   });
 
   contenitore.querySelectorAll('.album__foto').forEach((img) => {
-    img.addEventListener('click', () => {
-      if (confirm('Eliminare questa foto?')) {
-        eliminaFoto(piantaId, img.dataset.id).catch((e) => mostraErrore('Non sono riuscita a eliminare la foto: ' + e.message));
-      }
+    img.addEventListener('click', () => apriAzioniFoto(pianta, img.dataset.id, img.src));
+  });
+}
+
+// Toccando una foto dell'album si sceglie cosa farne: identificare la pianta
+// o eliminare la foto (prima il tocco eliminava e basta).
+function apriAzioniFoto(pianta, fotoId, fotoB64) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="foglio">
+      <img class="azioni-foto__anteprima" src="${fotoB64}" alt="foto della pianta" />
+      <button type="button" class="btn btn-secondario btn-blocco" id="af-identifica">🔍 Che pianta è?</button>
+      <button type="button" class="btn btn-pericolo btn-blocco" id="af-elimina">Elimina questa foto</button>
+      <button type="button" class="btn btn-secondario btn-blocco" id="af-annulla">Annulla</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#af-annulla').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  overlay.querySelector('#af-identifica').addEventListener('click', () => {
+    overlay.remove();
+    apriIdentificazione(fotoB64, (candidata) => {
+      // Il nome proposto si precompila nel modulo di modifica: salva sempre la persona.
+      apriModaleModificaPianta({ ...pianta, nome: candidata.nome });
+      mostraInfo('Nome proposto: controlla e salva tu.');
     });
+  });
+
+  overlay.querySelector('#af-elimina').addEventListener('click', () => {
+    if (!confirm('Eliminare questa foto?')) return;
+    overlay.remove();
+    eliminaFoto(pianta.id, fotoId).catch((e) => mostraErrore('Non sono riuscita a eliminare la foto: ' + e.message));
   });
 }
 

@@ -1,10 +1,17 @@
 // View "Giardino": griglia di piante, filtro per tag, FAB per aggiungere una pianta.
+// In cima, separata da una riga sottile, la sezione "Da tenere d'occhio" con le
+// piante che hanno problemi aperti (stato in_corso o peggiorato).
 
 import { osservaPiante, osservaProblemaAttivo, creaPianta } from '../db.js';
 import { comprimiFoto, generaThumbnail } from '../foto.js';
+import { apriIdentificazione } from './identifica.js';
 import { vai, mostraErrore, mostraInfo, escapeHtml, registraCleanup, TAG_SUGGERITI } from '../util.js';
 
 let tagAttivo = null;
+let pianteCorrenti = [];
+// piantaId -> ha almeno un problema attivo. Sopravvive tra un montaggio e l'altro
+// della view: alla riapertura la sezione appare subito, poi si riallinea coi dati.
+const problemaAttivo = new Map();
 
 export async function renderGiardino(container) {
   container.innerHTML = `
@@ -13,7 +20,7 @@ export async function renderGiardino(container) {
       <button id="btn-impostazioni" class="icon-btn" aria-label="Impostazioni">⚙️</button>
     </header>
     <div class="filtri-tag" id="filtri-tag"></div>
-    <div id="griglia-piante" class="griglia-piante">
+    <div id="zona-piante">
       <p class="placeholder">Sto raccogliendo le piante…</p>
     </div>
     <button id="fab-nuova-pianta" class="fab" aria-label="Nuova pianta">+</button>
@@ -22,28 +29,54 @@ export async function renderGiardino(container) {
   document.getElementById('btn-impostazioni').addEventListener('click', () => vai('/impostazioni'));
   document.getElementById('fab-nuova-pianta').addEventListener('click', apriModaleNuovaPianta);
 
-  const listenerBadge = new Map(); // piantaId -> unsubscribe
+  const listenerProblemi = new Map(); // piantaId -> unsubscribe
 
   const unsubscribePiante = osservaPiante(
     (piante) => {
-      disegnaFiltri(piante);
-      disegnaGriglia(piante, listenerBadge);
+      pianteCorrenti = piante;
+      sincronizzaListenerProblemi(piante, listenerProblemi);
+      disegnaFiltri();
+      disegnaGriglia();
     },
     (errore) => mostraErrore('Non riesco a caricare il giardino: ' + errore.message)
   );
 
   registraCleanup(() => {
     unsubscribePiante();
-    for (const unsub of listenerBadge.values()) unsub();
-    listenerBadge.clear();
+    for (const unsub of listenerProblemi.values()) unsub();
+    listenerProblemi.clear();
   });
 }
 
-function disegnaFiltri(piante) {
+// Un listener leggero per pianta: aggiorna la mappa e ridisegna la griglia solo
+// quando lo stato cambia davvero (evita giri a vuoto a ogni snapshot).
+function sincronizzaListenerProblemi(piante, listenerProblemi) {
+  const presenti = new Set(piante.map((p) => p.id));
+  for (const [id, unsub] of listenerProblemi) {
+    if (!presenti.has(id)) {
+      unsub();
+      listenerProblemi.delete(id);
+      problemaAttivo.delete(id);
+    }
+  }
+  for (const p of piante) {
+    if (listenerProblemi.has(p.id)) continue;
+    listenerProblemi.set(
+      p.id,
+      osservaProblemaAttivo(p.id, (attivo) => {
+        if (problemaAttivo.get(p.id) === attivo) return;
+        problemaAttivo.set(p.id, attivo);
+        disegnaGriglia();
+      })
+    );
+  }
+}
+
+function disegnaFiltri() {
   const contenitore = document.getElementById('filtri-tag');
   if (!contenitore) return;
   const tagPresenti = new Set();
-  for (const p of piante) for (const t of p.tags || []) tagPresenti.add(t);
+  for (const p of pianteCorrenti) for (const t of p.tags || []) tagPresenti.add(t);
   if (tagAttivo && !tagPresenti.has(tagAttivo)) tagAttivo = null;
 
   if (tagPresenti.size === 0) {
@@ -60,22 +93,21 @@ function disegnaFiltri(piante) {
     chip.addEventListener('click', () => {
       const tag = chip.dataset.tag;
       tagAttivo = tagAttivo === tag ? null : tag;
-      disegnaFiltri(window.__ultimePiante || []);
-      disegnaGriglia(window.__ultimePiante || [], window.__ultimoListenerBadge || new Map());
+      disegnaFiltri();
+      disegnaGriglia();
     });
   });
 }
 
-function disegnaGriglia(piante, listenerBadge) {
-  window.__ultimePiante = piante;
-  window.__ultimoListenerBadge = listenerBadge;
-
-  const contenitore = document.getElementById('griglia-piante');
+function disegnaGriglia() {
+  const contenitore = document.getElementById('zona-piante');
   if (!contenitore) return;
 
-  const filtrate = tagAttivo ? piante.filter((p) => (p.tags || []).includes(tagAttivo)) : piante;
+  const filtrate = tagAttivo
+    ? pianteCorrenti.filter((p) => (p.tags || []).includes(tagAttivo))
+    : pianteCorrenti;
 
-  if (piante.length === 0) {
+  if (pianteCorrenti.length === 0) {
     contenitore.innerHTML = `<p class="placeholder">Non hai ancora piante qui. Tocca "+" per aggiungere la prima.</p>`;
     return;
   }
@@ -84,16 +116,31 @@ function disegnaGriglia(piante, listenerBadge) {
     return;
   }
 
-  contenitore.innerHTML = filtrate
-    .map(
-      (p) => `
+  const problematiche = filtrate.filter((p) => problemaAttivo.get(p.id));
+  const altre = filtrate.filter((p) => !problemaAttivo.get(p.id));
+
+  contenitore.innerHTML =
+    (problematiche.length
+      ? `<p class="titolo-problematiche">Da tenere d'occhio</p>
+         <div class="griglia-piante griglia-piante--problematiche">${problematiche.map(cardPianta).join('')}</div>` +
+        (altre.length ? `<div class="divisore-problematiche"></div>` : '')
+      : '') +
+    (altre.length ? `<div class="griglia-piante">${altre.map(cardPianta).join('')}</div>` : '');
+
+  contenitore.querySelectorAll('.card-pianta').forEach((card) => {
+    card.addEventListener('click', () => vai(`/pianta/${card.dataset.id}`));
+  });
+}
+
+function cardPianta(p) {
+  return `
       <button class="card-pianta" data-id="${p.id}">
         ${
           p.thumb
             ? `<img class="card-pianta__thumb" src="${p.thumb}" alt="${escapeHtml(p.nome)}" />`
             : `<div class="card-pianta__thumb card-pianta__thumb--vuota">🌿</div>`
         }
-        <span class="badge-problema" hidden data-badge="${p.id}"></span>
+        ${problemaAttivo.get(p.id) ? `<span class="badge-problema"></span>` : ''}
         <div class="card-pianta__corpo">
           <p class="card-pianta__nome">${escapeHtml(p.nome || '(senza nome)')}</p>
           <p class="card-pianta__posizione">${escapeHtml(p.posizione || '')}</p>
@@ -101,24 +148,7 @@ function disegnaGriglia(piante, listenerBadge) {
             ${(p.tags || []).slice(0, 3).map((t) => `<span class="mini-chip">${escapeHtml(t)}</span>`).join('')}
           </div>
         </div>
-      </button>`
-    )
-    .join('');
-
-  contenitore.querySelectorAll('.card-pianta').forEach((card) => {
-    card.addEventListener('click', () => vai(`/pianta/${card.dataset.id}`));
-  });
-
-  // Badge "problema attivo": un piccolo listener per pianta visibile.
-  for (const unsub of listenerBadge.values()) unsub();
-  listenerBadge.clear();
-  for (const p of filtrate) {
-    const unsub = osservaProblemaAttivo(p.id, (attivo) => {
-      const el = contenitore.querySelector(`[data-badge="${p.id}"]`);
-      if (el) el.hidden = !attivo;
-    });
-    listenerBadge.set(p.id, unsub);
-  }
+      </button>`;
 }
 
 function apriModaleNuovaPianta() {
@@ -145,8 +175,9 @@ function apriModaleNuovaPianta() {
           <textarea id="np-note" placeholder="Tutto ciò che è utile ricordare"></textarea>
         </div>
         <div class="campo">
-          <label for="np-foto">Foto (facoltativa)</label>
-          <input type="file" id="np-foto" accept="image/*" capture="environment" />
+          <label for="np-foto">Foto — scattala o scegli dalla galleria (facoltativa)</label>
+          <input type="file" id="np-foto" accept="image/*" />
+          <button type="button" class="btn btn-secondario btn-blocco" id="np-identifica" hidden>🔍 Che pianta è?</button>
         </div>
         <button type="submit" class="btn btn-primario btn-blocco">Aggiungi al giardino</button>
         <button type="button" class="btn btn-secondario btn-blocco" id="np-annulla">Annulla</button>
@@ -169,6 +200,31 @@ function apriModaleNuovaPianta() {
         chip.classList.add('chip--attivo');
       }
     });
+  });
+
+  // "Che pianta è?": compare appena c'è una foto, propone 2-3 candidate e
+  // precompila il nome (che resta modificabile: l'ultima parola è di chi salva).
+  const inputFoto = overlay.querySelector('#np-foto');
+  const btnIdentifica = overlay.querySelector('#np-identifica');
+  inputFoto.addEventListener('change', () => {
+    btnIdentifica.hidden = !inputFoto.files[0];
+  });
+  btnIdentifica.addEventListener('click', async () => {
+    const file = inputFoto.files[0];
+    if (!file) return;
+    btnIdentifica.disabled = true;
+    try {
+      const b64 = await comprimiFoto(file);
+      apriIdentificazione(b64, (candidata) => {
+        const campoNome = overlay.querySelector('#np-nome');
+        campoNome.value = candidata.nome;
+        mostraInfo('Nome proposto: puoi correggerlo prima di salvare.');
+      });
+    } catch (errore) {
+      mostraErrore('Non sono riuscita a leggere la foto: ' + errore.message);
+    } finally {
+      btnIdentifica.disabled = false;
+    }
   });
 
   overlay.querySelector('#np-annulla').addEventListener('click', () => overlay.remove());

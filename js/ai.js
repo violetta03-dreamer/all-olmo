@@ -141,6 +141,60 @@ function analizzaJsonCura(testo) {
   return scheda;
 }
 
+// ---------- Identificazione "che pianta è?" ----------
+
+export const PROMPT_IDENTIFICA = `Sei un assistente esperto di botanica. Ricevi la foto di una pianta: proponi da 1 a 3 specie candidate, in ordine dalla più probabile, perché chi la cura possa scegliere il nome giusto. Non sei mai la parola finale: proponi, non decidi.
+
+Regole:
+1. MAI un'etichetta secca. Per ogni candidata dichiari la confidenza (alta / media / bassa) e cosa nella foto te la fa pensare.
+2. INCERTEZZA DICHIARATA. Se la foto non basta per un riconoscimento serio (troppo lontana, sfocata, senza foglie o fiori riconoscibili), dillo nel campo "nota" e spiega cosa fotografare per riprovare (esempio: una foglia da vicino, il fiore, la pianta intera). In quel caso proponi comunque le candidate plausibili con confidenza bassa, o lascia l'elenco vuoto se davvero non c'è appiglio.
+3. NIENTE INVENZIONI. Non indicare varietà o cultivar che dalla foto non puoi distinguere: fermati al livello di dettaglio che la foto giustifica (anche il solo genere, se la specie è incerta).
+4. In "distinguere" scrivi cosa controllare sulla pianta vera per confermare la candidata o per distinguerla dalle altre proposte.
+
+Significato dei campi: "nome" = nome comune italiano (quello con cui la si chiama di solito); "nomeScientifico" = genere e specie in latino, o il solo genere se la specie è incerta; "confidenza" = alta, media o bassa; "perche" = gli indizi visti nella foto; "distinguere" = la verifica suggerita; "nota" = osservazioni generali (qualità della foto, cosa manca), stringa vuota se non serve.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo, senza markdown e senza backtick, con esattamente questa struttura:
+
+{"candidate": [{"nome": "", "nomeScientifico": "", "confidenza": "alta|media|bassa", "perche": "", "distinguere": ""}], "nota": ""}
+
+Massimo 3 candidate. Tutto in italiano.`;
+
+/**
+ * Chiede all'AI di identificare la pianta nella foto.
+ * Ritorna { candidate: [{nome, nomeScientifico, confidenza, perche, distinguere}], nota }.
+ */
+export async function identificaPianta(fotoB64) {
+  const rispostaGrezza = await chiediAI(
+    [{ ruolo: 'utente', testo: 'Che pianta è quella nella foto?', fotoB64 }],
+    { systemPrompt: PROMPT_IDENTIFICA }
+  );
+  return analizzaJsonIdentificazione(rispostaGrezza);
+}
+
+function analizzaJsonIdentificazione(testo) {
+  const vuoto = { candidate: [], nota: '' };
+  if (!testo) return vuoto;
+  const inizio = testo.indexOf('{');
+  const fine = testo.lastIndexOf('}');
+  if (inizio === -1 || fine === -1 || fine < inizio) return vuoto;
+  try {
+    const oggetto = JSON.parse(testo.slice(inizio, fine + 1));
+    const candidate = (Array.isArray(oggetto.candidate) ? oggetto.candidate : [])
+      .filter((c) => c && typeof c.nome === 'string' && c.nome.trim())
+      .slice(0, 3)
+      .map((c) => ({
+        nome: c.nome.trim(),
+        nomeScientifico: typeof c.nomeScientifico === 'string' ? c.nomeScientifico.trim() : '',
+        confidenza: ['alta', 'media', 'bassa'].includes(c.confidenza) ? c.confidenza : '',
+        perche: typeof c.perche === 'string' ? c.perche.trim() : '',
+        distinguere: typeof c.distinguere === 'string' ? c.distinguere.trim() : '',
+      }));
+    return { candidate, nota: typeof oggetto.nota === 'string' ? oggetto.nota.trim() : '' };
+  } catch {
+    return vuoto;
+  }
+}
+
 // ---------- Costruzione del contesto ----------
 
 /** Costruisce il messaggio di contesto (scheda pianta + storico problemi + data) da anteporre alla conversazione. */
