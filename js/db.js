@@ -43,6 +43,7 @@ export async function ottieniPianta(id) {
 export async function creaPianta(dati) {
   const ref = await addDoc(collection(assicuraDb(), 'piante'), {
     nome: dati.nome || '',
+    nomeScientifico: dati.nomeScientifico || '',
     posizione: dati.posizione || '',
     tags: dati.tags || [],
     note: dati.note || '',

@@ -207,6 +207,9 @@ function apriModaleNuovaPianta() {
   // Foto: la scelta fotocamera/galleria la offre l'app (il photo picker di
   // Android da solo mostrerebbe soltanto la galleria).
   let fileFoto = null;
+  // Nome botanico della candidata scelta con "Che pianta è?": si salva con la
+  // pianta (la scelta l'ha fatta la persona, l'app la sta solo ricordando).
+  let nomeScientificoScelto = '';
   const btnFoto = overlay.querySelector('#np-foto-btn');
   const anteprimaFoto = overlay.querySelector('#np-anteprima');
   const btnIdentifica = overlay.querySelector('#np-identifica');
@@ -230,6 +233,7 @@ function apriModaleNuovaPianta() {
       apriIdentificazione(b64, (candidata) => {
         const campoNome = overlay.querySelector('#np-nome');
         campoNome.value = candidata.nome;
+        nomeScientificoScelto = candidata.nomeScientifico || '';
         mostraInfo('Nome proposto: puoi correggerlo prima di salvare.');
       });
     } catch (errore) {
@@ -259,7 +263,14 @@ function apriModaleNuovaPianta() {
         thumb = await generaThumbnail(fileFoto);
       }
 
-      const id = await creaPianta({ nome, posizione, tags: [...tagScelti], note, thumb });
+      const id = await creaPianta({
+        nome,
+        nomeScientifico: nomeScientificoScelto,
+        posizione,
+        tags: [...tagScelti],
+        note,
+        thumb,
+      });
       overlay.remove();
       mostraInfo('Pianta aggiunta al giardino.');
       vai(`/pianta/${id}`);

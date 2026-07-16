@@ -106,6 +106,7 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo, se
 export async function generaSchedaCura(pianta, testoIncollato = null) {
   const descrizionePianta = [
     `Pianta: ${pianta?.nome || '(senza nome)'}`,
+    pianta?.nomeScientifico ? `Nome botanico: ${pianta.nomeScientifico}` : '',
     pianta?.posizione ? `Posizione: ${pianta.posizione}` : '',
     (pianta?.tags || []).length ? `Tag: ${pianta.tags.join(', ')}` : '',
     pianta?.note ? `Note: ${pianta.note}` : '',
@@ -204,6 +205,7 @@ export function costruisciContesto(pianta, problemiPassati, problemaCorrente, ri
   righe.push('');
   righe.push('SCHEDA PIANTA');
   righe.push(`Nome: ${pianta?.nome || '(senza nome)'}`);
+  if (pianta?.nomeScientifico) righe.push(`Nome botanico: ${pianta.nomeScientifico}`);
   righe.push(`Posizione: ${pianta?.posizione || 'non indicata'}`);
   righe.push(`Tag: ${(pianta?.tags || []).join(', ') || 'nessuno'}`);
   if (pianta?.note) righe.push(`Note: ${pianta.note}`);

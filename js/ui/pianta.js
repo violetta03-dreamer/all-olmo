@@ -186,8 +186,13 @@ function apriAzioniFoto(pianta, fotoId, fotoB64) {
   overlay.querySelector('#af-identifica').addEventListener('click', () => {
     overlay.remove();
     apriIdentificazione(fotoB64, (candidata) => {
-      // Il nome proposto si precompila nel modulo di modifica: salva sempre la persona.
-      apriModaleModificaPianta({ ...pianta, nome: candidata.nome });
+      // Nome e nome botanico proposti si precompilano nel modulo di modifica:
+      // salva sempre la persona.
+      apriModaleModificaPianta({
+        ...pianta,
+        nome: candidata.nome,
+        nomeScientifico: candidata.nomeScientifico || pianta.nomeScientifico || '',
+      });
       mostraInfo('Nome proposto: controlla e salva tu.');
     });
   });
@@ -251,6 +256,12 @@ function disegnaSchedaCura(pianta) {
   if (!contenitore) return;
   const cura = pianta.cura;
 
+  // Prima riga della scheda: il nome botanico (arriva da "Che pianta è?" o
+  // dal modulo Modifica pianta). C'è anche quando la scheda è ancora vuota.
+  const rigaBotanico = pianta.nomeScientifico
+    ? `<p class="cura-scheda__campo"><strong>Nome botanico:</strong> <em>${escapeHtml(pianta.nomeScientifico)}</em></p>`
+    : '';
+
   const bottoni = (primaVolta) => `
     <div class="cura-azioni">
       ${primaVolta ? '' : `<button class="btn btn-secondario" id="cura-modifica">Modifica</button>`}
@@ -261,12 +272,14 @@ function disegnaSchedaCura(pianta) {
 
   if (!cura) {
     contenitore.innerHTML = `
+      ${rigaBotanico ? `<div class="cura-scheda" style="margin-bottom:0.6rem;">${rigaBotanico}</div>` : ''}
       <p class="placeholder" style="margin-bottom:0.6rem;">Indicazioni generali per la cura di questa pianta (non una diagnosi). Puoi farla scrivere all'AI, incollare un testo da strutturare, o scriverla tu.</p>
       ${bottoni(true)}`;
   } else {
     const campiPieni = CAMPI_CURA.filter(([chiave]) => cura[chiave]);
     contenitore.innerHTML = `
       <div class="cura-scheda">
+        ${rigaBotanico}
         ${campiPieni
           .map(
             ([chiave, etichetta]) => `
@@ -402,6 +415,10 @@ function apriModaleModificaPianta(pianta) {
           <input type="text" id="mp-nome" required value="${escapeHtml(pianta.nome || '')}" />
         </div>
         <div class="campo">
+          <label for="mp-scientifico">Nome botanico (facoltativo)</label>
+          <input type="text" id="mp-scientifico" value="${escapeHtml(pianta.nomeScientifico || '')}" placeholder="es. Camellia japonica" />
+        </div>
+        <div class="campo">
           <label for="mp-posizione">Posizione</label>
           <input type="text" id="mp-posizione" value="${escapeHtml(pianta.posizione || '')}" />
         </div>
@@ -465,6 +482,7 @@ function apriModaleModificaPianta(pianta) {
     try {
       await aggiornaPianta(pianta.id, {
         nome: overlay.querySelector('#mp-nome').value.trim(),
+        nomeScientifico: overlay.querySelector('#mp-scientifico').value.trim(),
         posizione: overlay.querySelector('#mp-posizione').value.trim(),
         note: overlay.querySelector('#mp-note').value.trim(),
         tags: [...tagScelti],
