@@ -218,19 +218,24 @@ function disegnaConversazione() {
     return;
   }
 
+  // Niente a-capo o indentazione dentro la bolla: .bolla è white-space:pre-wrap
+  // e li renderebbe come righe vuote sopra e sotto il testo.
   contenitore.innerHTML =
     stato.messaggi
-      .map(
-        (m) => `
-      <div class="bolla bolla--${m.ruolo === 'utente' ? 'utente' : 'ai'}">
-        ${m.testo ? (m.ruolo === 'ai' ? markdownAHtml(m.testo) : escapeHtml(m.testo)) : ''}
-        ${m.fotoB64 ? `<img class="bolla__foto" src="${m.fotoB64}" alt="foto allegata" />` : ''}
-        <div style="font-size:0.68rem; opacity:0.65; margin-top:0.3rem;">${formattaOra(m.ts)}</div>
-      </div>`
-      )
+      .map((m) => {
+        const corpo = m.testo ? (m.ruolo === 'ai' ? markdownAHtml(m.testo) : escapeHtml(m.testo)) : '';
+        const foto = m.fotoB64 ? `<img class="bolla__foto" src="${m.fotoB64}" alt="foto allegata" />` : '';
+        return `<div class="bolla bolla--${m.ruolo === 'utente' ? 'utente' : 'ai'}">${corpo}${foto}<div style="font-size:0.68rem; opacity:0.65; margin-top:0.3rem;">${formattaOra(m.ts)}</div></div>`;
+      })
       .join('') + (stato.elaborando ? `<div class="bolla bolla--pensando">Sto pensando…</div>` : '');
 
-  contenitore.scrollTop = contenitore.scrollHeight;
+  // A scorrere è la pagina intera, non il contenitore: si atterra sull'ultimo messaggio.
+  const scrollaInFondo = () => window.scrollTo(0, document.documentElement.scrollHeight);
+  requestAnimationFrame(scrollaInFondo);
+  // Le foto (base64) prendono altezza solo a decodifica avvenuta: si riscorre al load.
+  contenitore.querySelectorAll('img').forEach((img) => {
+    if (!img.complete) img.addEventListener('load', scrollaInFondo, { once: true });
+  });
 }
 
 // Il bottone "Chiedi la diagnosi" compare solo quando c'è una conversazione
