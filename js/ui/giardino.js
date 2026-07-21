@@ -6,7 +6,7 @@ import { osservaPiante, osservaProblemaAttivo, creaPianta } from '../db.js';
 import { comprimiFoto, generaThumbnail } from '../foto.js';
 import { apriIdentificazione } from './identifica.js';
 import { apriSceltaFoto } from './scegli-foto.js';
-import { vai, mostraErrore, mostraInfo, escapeHtml, registraCleanup, TAG_SUGGERITI } from '../util.js';
+import { vai, mostraErrore, mostraInfo, escapeHtml, registraCleanup, TAG_SUGGERITI, TAG_LOCATION } from '../util.js';
 
 let tagAttivo = null;
 let pianteCorrenti = [];
@@ -100,6 +100,10 @@ function disegnaFiltri() {
   });
 }
 
+function ordinaPerNome(a, b) {
+  return (a.nome || '').localeCompare(b.nome || '', 'it');
+}
+
 function disegnaGriglia() {
   const contenitore = document.getElementById('zona-piante');
   if (!contenitore) return;
@@ -120,13 +124,35 @@ function disegnaGriglia() {
   const problematiche = filtrate.filter((p) => problemaAttivo.get(p.id));
   const altre = filtrate.filter((p) => !problemaAttivo.get(p.id));
 
+  let htmlAltre = '';
+
+  // Senza filtro attivo: raggruppa per tag location, alfabetico dentro ogni gruppo.
+  // Con filtro attivo: lista piatta.
+  if (!tagAttivo && altre.length) {
+    const giaMostrate = new Set();
+    for (const loc of TAG_LOCATION) {
+      const gruppo = altre.filter((p) => (p.tags || []).includes(loc)).sort(ordinaPerNome);
+      if (gruppo.length === 0) continue;
+      for (const p of gruppo) giaMostrate.add(p.id);
+      htmlAltre += `<p class="titolo-gruppo-location">${escapeHtml(loc)}</p>
+        <div class="griglia-piante">${gruppo.map(cardPianta).join('')}</div>`;
+    }
+    const senzaLocation = altre.filter((p) => !giaMostrate.has(p.id)).sort(ordinaPerNome);
+    if (senzaLocation.length) {
+      htmlAltre += `<p class="titolo-gruppo-location">altro</p>
+        <div class="griglia-piante">${senzaLocation.map(cardPianta).join('')}</div>`;
+    }
+  } else if (altre.length) {
+    htmlAltre = `<div class="griglia-piante">${altre.sort(ordinaPerNome).map(cardPianta).join('')}</div>`;
+  }
+
   contenitore.innerHTML =
     (problematiche.length
       ? `<p class="titolo-problematiche">Da tenere d'occhio</p>
-         <div class="griglia-piante griglia-piante--problematiche">${problematiche.map(cardPianta).join('')}</div>` +
+         <div class="griglia-piante griglia-piante--problematiche">${problematiche.sort(ordinaPerNome).map(cardPianta).join('')}</div>` +
         (altre.length ? `<div class="divisore-problematiche"></div>` : '')
       : '') +
-    (altre.length ? `<div class="griglia-piante">${altre.map(cardPianta).join('')}</div>` : '');
+    htmlAltre;
 
   contenitore.querySelectorAll('.card-pianta').forEach((card) => {
     card.addEventListener('click', () => vai(`/pianta/${card.dataset.id}`));
@@ -170,6 +196,10 @@ function apriModaleNuovaPianta() {
         <div class="campo">
           <label>Tag</label>
           <div class="selettore-tag" id="np-tag"></div>
+        </div>
+        <div class="campo">
+          <label for="np-anno">Anno di arrivo</label>
+          <input type="number" id="np-anno" placeholder="es. 2024" min="1900" max="2099" />
         </div>
         <div class="campo">
           <label for="np-note">Note</label>
@@ -256,6 +286,7 @@ function apriModaleNuovaPianta() {
     try {
       const nome = overlay.querySelector('#np-nome').value.trim();
       const posizione = overlay.querySelector('#np-posizione').value.trim();
+      const annoVal = overlay.querySelector('#np-anno').value.trim();
       const note = overlay.querySelector('#np-note').value.trim();
 
       let thumb = '';
@@ -268,6 +299,7 @@ function apriModaleNuovaPianta() {
         nomeScientifico: nomeScientificoScelto,
         posizione,
         tags: [...tagScelti],
+        annoArrivo: annoVal ? parseInt(annoVal, 10) : '',
         note,
         thumb,
       });

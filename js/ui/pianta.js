@@ -54,6 +54,7 @@ export async function renderPianta(container, piantaId) {
         <div class="card-pianta__tags" id="pianta-tags">
           ${(pianta.tags || []).map((t) => `<span class="mini-chip">${escapeHtml(t)}</span>`).join('')}
         </div>
+        ${pianta.annoArrivo ? `<p class="scheda-testata__anno">${escapeHtml(pianta.annoArrivo)}</p>` : ''}
         <button class="btn btn-primario scheda-testata__nuovo" id="btn-nuovo-problema">＋ Nuovo problema</button>
       </div>
     </div>
@@ -130,9 +131,15 @@ function disegnaAlbum(pianta, foto) {
   const contenitore = document.getElementById('album');
   if (!contenitore) return;
 
+  const mostraStella = foto.length > 1;
   contenitore.innerHTML =
     `<button class="album__aggiungi" id="album-aggiungi" aria-label="Aggiungi foto">+</button>` +
-    foto.map((f) => `<img class="album__foto" src="${f.b64}" alt="${escapeHtml(f.didascalia || 'foto pianta')}" data-id="${f.id}" />`).join('');
+    foto.map((f) => `
+      <div class="album__slot" data-id="${f.id}">
+        <img class="album__foto" src="${f.b64}" alt="${escapeHtml(f.didascalia || 'foto pianta')}" />
+        ${f.scattataIl ? `<span class="album__data">${formattaData(f.scattataIl)}</span>` : ''}
+        ${mostraStella ? `<button class="album__stella" aria-label="Usa come copertina" data-id="${f.id}">★</button>` : ''}
+      </div>`).join('');
 
   document.getElementById('album-aggiungi').addEventListener('click', () => {
     apriSceltaFoto(async (file) => {
@@ -159,8 +166,38 @@ function disegnaAlbum(pianta, foto) {
     });
   });
 
-  contenitore.querySelectorAll('.album__foto').forEach((img) => {
-    img.addEventListener('click', () => apriAzioniFoto(pianta, img.dataset.id, img.src));
+  // Stella: imposta la foto come copertina
+  contenitore.querySelectorAll('.album__stella').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const fotoId = btn.dataset.id;
+      const fotoScelta = foto.find((f) => f.id === fotoId);
+      if (!fotoScelta) return;
+      btn.disabled = true;
+      try {
+        const thumb = await thumbnailDaDataUrl(fotoScelta.b64);
+        await aggiornaPianta(piantaId, { thumb });
+        const fotoPrincipale = document.getElementById('foto-principale');
+        if (fotoPrincipale) {
+          fotoPrincipale.src = fotoScelta.b64;
+          fotoPrincipale.style.display = '';
+        }
+        mostraInfo('Copertina aggiornata.');
+      } catch (errore) {
+        mostraErrore('Non sono riuscita a cambiare la copertina: ' + errore.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  contenitore.querySelectorAll('.album__slot').forEach((slot) => {
+    const img = slot.querySelector('.album__foto');
+    slot.addEventListener('click', (e) => {
+      // Non aprire il menu azioni se si è toccata la stella
+      if (e.target.closest('.album__stella')) return;
+      apriAzioniFoto(pianta, slot.dataset.id, img.src);
+    });
   });
 }
 
@@ -427,6 +464,10 @@ function apriModaleModificaPianta(pianta) {
           <div class="selettore-tag" id="mp-tag"></div>
         </div>
         <div class="campo">
+          <label for="mp-anno">Anno di arrivo</label>
+          <input type="number" id="mp-anno" value="${pianta.annoArrivo || ''}" placeholder="es. 2024" min="1900" max="2099" />
+        </div>
+        <div class="campo">
           <label for="mp-note">Note</label>
           <textarea id="mp-note">${escapeHtml(pianta.note || '')}</textarea>
         </div>
@@ -480,12 +521,14 @@ function apriModaleModificaPianta(pianta) {
     pulsante.disabled = true;
     pulsante.textContent = 'Salvo…';
     try {
+      const annoVal = overlay.querySelector('#mp-anno').value.trim();
       await aggiornaPianta(pianta.id, {
         nome: overlay.querySelector('#mp-nome').value.trim(),
         nomeScientifico: overlay.querySelector('#mp-scientifico').value.trim(),
         posizione: overlay.querySelector('#mp-posizione').value.trim(),
         note: overlay.querySelector('#mp-note').value.trim(),
         tags: [...tagScelti],
+        annoArrivo: annoVal ? parseInt(annoVal, 10) : '',
       });
       overlay.remove();
       // Siamo già su #/pianta/<id>: vai() non farebbe scattare hashchange e la

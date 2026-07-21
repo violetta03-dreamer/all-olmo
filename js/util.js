@@ -122,15 +122,28 @@ export function eseguiCleanup() {
   listaCleanup = [];
 }
 
-export const TAG_SUGGERITI = [
-  'interno',
-  'balcone',
+// --- Tag ---
+
+// Tag di posizione (usati anche per raggruppare la griglia del giardino)
+export const TAG_LOCATION = [
+  'olmo',
+  'giardino',
+  'cortile',
+  'casa',
   'veranda',
-  'orto',
+  'balcone',
+  'fuori',
+  'dentro',
+];
+
+// Tutti i tag suggeriti: prima le location, poi le categorie
+export const TAG_SUGGERITI = [
+  ...TAG_LOCATION,
+  'commestibili',
   'officinali',
-  'aromatiche',
   'grasse',
-  'delicata',
-  'nuova',
-  'talea',
+  'delicate',
+  'pericolose',
+  'annuali',
+  'sempreverdi',
 ];
