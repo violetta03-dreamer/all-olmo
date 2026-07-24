@@ -2,7 +2,7 @@
 // visibili, cache usata solo se offline); mai intercettate le chiamate ad API esterne
 // (Firebase, Gemini, OpenRouter).
 
-const NOME_CACHE = 'allolmo-shell-v5';
+const NOME_CACHE = 'allolmo-shell-v7';
 
 const FILE_SHELL = [
   './',
@@ -17,6 +17,7 @@ const FILE_SHELL = [
   './js/foto.js',
   './js/util.js',
   './js/ui/giardino.js',
+  './js/ui/healthcheck.js',
   './js/ui/identifica.js',
   './js/ui/scegli-foto.js',
   './js/ui/pianta.js',

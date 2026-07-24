@@ -59,7 +59,7 @@ Regole che valgono SEMPRE, in entrambe le fasi:
 
 6. TERMINI TECNICI SPIEGATI. Alla prima occorrenza di un termine tecnico, spiegalo in una riga (esempio: "clorosi: le foglie ingialliscono perché la pianta non riesce ad assorbire bene i nutrienti").
 
-7. PROBLEMA RIAPERTO. Se ti viene segnalato che il problema è "riaperto" (era già stato affrontato ed è tornato, o non è mai davvero passato), non ripartire da zero: leggi il riassunto dell'ultima volta che ti viene fornito nel contesto e chiedi solo cosa è cambiato rispetto ad allora.
+7. CONTINUITÀ E MEMORIA DELL'ESPERIENZA. Se ti viene segnalato che il problema è "riaperto" (era già stato affrontato ed è tornato, o non è mai davvero passato), non ripartire da zero: leggi il riassunto dell'ultima volta che ti viene fornito nel contesto e chiedi solo cosa è cambiato rispetto ad allora. Chiedi anche cosa il giardiniere ha fatto dall'ultima volta — non solo cosa è cambiato nella pianta, ma quali azioni ha eseguito tra quelle consigliate in precedenza e com'è andata. Questo vale non solo alla riapertura: a ogni ritorno nella conversazione dopo una pausa, se il contesto mostra azioni consigliate in precedenza, chiedi se sono state eseguite e con quale risultato prima di dare nuovi consigli.
 
 8. PROPONI LA CHIUSURA, NON DECIDERLA. Se dalla conversazione emerge che il problema è risolto o superato (es. "è guarita", "sta ricacciando", "non peggiora più"), proponi in una riga di chiudere il problema aggiornando lo stato in alto nella pagina. Lo stato lo cambia sempre la persona: tu puoi solo suggerirlo, una volta, senza insistere.
 
@@ -69,9 +69,9 @@ Ti viene sempre passato nel contesto: la scheda della pianta (nome, posizione, t
 
 export const PROMPT_RIASSUNTO = `Leggi la conversazione seguente tra una persona e un assistente esperto di piante riguardo un problema su una pianta. Produci ESCLUSIVAMENTE un oggetto JSON valido, senza testo prima o dopo, senza markdown e senza backtick, con esattamente questa struttura:
 
-{"titolo": "il problema in 2-3 parole, minuscole (es. 'sofferenza fogliare', 'cocciniglia sul fusto')", "sintomi": "descrizione breve dei sintomi osservati", "ipotesi": [{"nome": "nome ipotesi", "confidenza": "alta|media|bassa", "perche": "perché potrebbe essere questa causa", "confermerebbe": "cosa la confermerebbe", "smentirebbe": "cosa la smentirebbe"}], "azioni": ["azione consigliata 1", "azione consigliata 2"]}
+{"titolo": "il problema in 2-3 parole, minuscole (es. 'sofferenza fogliare', 'cocciniglia sul fusto')", "sintomi": "descrizione breve dei sintomi osservati", "ipotesi": [{"nome": "nome ipotesi", "confidenza": "alta|media|bassa", "perche": "perché potrebbe essere questa causa", "confermerebbe": "cosa la confermerebbe", "smentirebbe": "cosa la smentirebbe"}], "azioni": ["azione consigliata 1", "azione consigliata 2"], "fatto": "azioni realmente eseguite dal giardiniere emerse dalla conversazione", "esito": "com'è andata: migliorato / peggiorato / invariato / non ancora verificato"}
 
-Se un campo non è emerso dalla conversazione, usa una stringa vuota "" o un array vuoto []. Non aggiungere altri campi oltre a questi quattro.`;
+Se un campo non è emerso dalla conversazione, usa una stringa vuota "" o un array vuoto []. Non aggiungere altri campi oltre a questi sei.`;
 
 // ---------- Scheda di cura ----------
 
@@ -105,7 +105,7 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza testo prima o dopo, se
  */
 export async function generaSchedaCura(pianta, testoIncollato = null) {
   const descrizionePianta = [
-    `Pianta: ${pianta?.nome || '(senza nome)'}`,
+    `Pianta: ${pianta?.nome || '(da identificare)'}`,
     pianta?.nomeScientifico ? `Nome botanico: ${pianta.nomeScientifico}` : '',
     pianta?.posizione ? `Posizione: ${pianta.posizione}` : '',
     (pianta?.tags || []).length ? `Tag: ${pianta.tags.join(', ')}` : '',
@@ -196,6 +196,67 @@ function analizzaJsonIdentificazione(testo) {
   }
 }
 
+// ---------- Healthcheck "Diamo un'occhiata" ----------
+
+export const PROMPT_HEALTHCHECK = `Sei un assistente esperto di piante. Stai facendo un check-up visivo: osservi una foto e dici cosa noti, senza cercare problemi dove non ce ne sono.
+
+Regole:
+1. OSSERVA, NON DIAGNOSTICARE. Il tuo compito è descrivere cosa vedi, non cercare guai per essere utile. "Non noto niente di preoccupante" è una risposta perfettamente valida — anzi, è una buona notizia.
+2. Se ricevi due foto (una recente e una precedente), nota le differenze visibili, con prudenza: cambiamenti di stagione, luce diversa o angolazione diversa possono ingannare.
+3. Considera la stagione (ti viene fornita la data) e la scheda di cura se presente: foglie gialle in autunno su una decidua sono normali, non un allarme.
+4. Se noti qualcosa, segnalalo con prudenza: cosa vedi, cosa potrebbe significare, cosa fare — che può benissimo essere "niente, tieni d'occhio".
+5. TONO: concreto, tranquillo, mai allarmista. Scrivi per qualcuno che ama le sue piante ma non è un esperto. Chiudi sempre con un "cosa fare", anche quando è "va tutto bene, non serve fare nulla".
+6. FORMATO: testo semplice con markdown leggero (grassetto, corsivo, elenchi se servono). Più breve di una diagnosi — poche righe se va tutto bene, qualcuna in più se c'è qualcosa da segnalare. Niente ipotesi strutturate, niente titoli con #.
+7. Rispondi in italiano.`;
+
+/**
+ * Esegue un healthcheck visivo: foto nuova + eventuale confronto + contesto pianta.
+ * Ritorna il testo della risposta AI.
+ */
+export async function chiediHealthcheck(fotoNuova, fotoConfronto, pianta, problemiPassati) {
+  const righe = [];
+  righe.push(`Data di oggi: ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
+  righe.push('');
+  righe.push('SCHEDA PIANTA');
+  righe.push(`Nome: ${pianta?.nome || '(da identificare)'}`);
+  if (pianta?.nomeScientifico) righe.push(`Nome botanico: ${pianta.nomeScientifico}`);
+  righe.push(`Posizione: ${pianta?.posizione || 'non indicata'}`);
+  if (pianta?.note) righe.push(`Note: ${pianta.note}`);
+
+  if (pianta?.cura) {
+    const campiPieni = CAMPI_CURA.filter(([chiave]) => pianta.cura[chiave]);
+    if (campiPieni.length) {
+      righe.push('');
+      righe.push('SCHEDA DI CURA');
+      for (const [chiave, etichetta] of campiPieni) {
+        righe.push(`${etichetta}: ${pianta.cura[chiave]}`);
+      }
+    }
+  }
+
+  if (problemiPassati?.length) {
+    righe.push('');
+    righe.push('STORICO PROBLEMI');
+    for (const p of problemiPassati) {
+      righe.push(`- "${p.titolo}" (stato: ${p.stato})`);
+      if (p.riassunto?.sintomi) righe.push(`  sintomi: ${p.riassunto.sintomi}`);
+      if (p.riassunto?.azioni?.length) righe.push(`  azioni consigliate: ${p.riassunto.azioni.join('; ')}`);
+      if (p.riassunto?.fatto) righe.push(`  azioni eseguite: ${p.riassunto.fatto}`);
+      if (p.riassunto?.esito) righe.push(`  esito: ${p.riassunto.esito}`);
+    }
+  }
+
+  const messaggi = [{ ruolo: 'contesto', testo: righe.join('\n') }];
+
+  if (fotoConfronto) {
+    messaggi.push({ ruolo: 'utente', testo: 'Ecco la foto recente della pianta e una foto precedente per confronto.', fotoB64: fotoNuova, fotoB64Extra: fotoConfronto });
+  } else {
+    messaggi.push({ ruolo: 'utente', testo: 'Ecco una foto della pianta per il check-up.', fotoB64: fotoNuova });
+  }
+
+  return await chiediAI(messaggi, { systemPrompt: PROMPT_HEALTHCHECK });
+}
+
 // ---------- Costruzione del contesto ----------
 
 /** Costruisce il messaggio di contesto (scheda pianta + storico problemi + data) da anteporre alla conversazione. */
@@ -204,7 +265,7 @@ export function costruisciContesto(pianta, problemiPassati, problemaCorrente, ri
   righe.push(`Data di oggi: ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
   righe.push('');
   righe.push('SCHEDA PIANTA');
-  righe.push(`Nome: ${pianta?.nome || '(senza nome)'}`);
+  righe.push(`Nome: ${pianta?.nome || '(da identificare)'}`);
   if (pianta?.nomeScientifico) righe.push(`Nome botanico: ${pianta.nomeScientifico}`);
   righe.push(`Posizione: ${pianta?.posizione || 'non indicata'}`);
   righe.push(`Tag: ${(pianta?.tags || []).join(', ') || 'nessuno'}`);
@@ -218,6 +279,8 @@ export function costruisciContesto(pianta, problemiPassati, problemaCorrente, ri
       righe.push(`- "${p.titolo}" (stato: ${p.stato})`);
       if (p.riassunto?.sintomi) righe.push(`  sintomi: ${p.riassunto.sintomi}`);
       if (p.riassunto?.azioni?.length) righe.push(`  azioni consigliate: ${p.riassunto.azioni.join('; ')}`);
+      if (p.riassunto?.fatto) righe.push(`  azioni eseguite dal giardiniere: ${p.riassunto.fatto}`);
+      if (p.riassunto?.esito) righe.push(`  esito: ${p.riassunto.esito}`);
     }
   }
 
@@ -234,7 +297,13 @@ export function costruisciContesto(pianta, problemiPassati, problemaCorrente, ri
     if (problemaCorrente.riassunto.azioni?.length) {
       righe.push(`Azioni già consigliate: ${problemaCorrente.riassunto.azioni.join('; ')}`);
     }
-    righe.push('Chiedi solo cosa è cambiato rispetto a questo riassunto, non ripartire da zero.');
+    if (problemaCorrente.riassunto.fatto) {
+      righe.push(`Azioni eseguite dal giardiniere: ${problemaCorrente.riassunto.fatto}`);
+    }
+    if (problemaCorrente.riassunto.esito) {
+      righe.push(`Esito: ${problemaCorrente.riassunto.esito}`);
+    }
+    righe.push('Chiedi solo cosa è cambiato rispetto a questo riassunto, non ripartire da zero. Chiedi anche cosa il giardiniere ha fatto tra le azioni consigliate e com\'è andata.');
   }
 
   return righe.join('\n');
@@ -287,7 +356,7 @@ export async function riassumiConversazione(messaggi) {
 }
 
 function analizzaJsonRiassunto(testo) {
-  const vuoto = { titolo: '', sintomi: '', ipotesi: [], azioni: [] };
+  const vuoto = { titolo: '', sintomi: '', ipotesi: [], azioni: [], fatto: '', esito: '' };
   if (!testo) return vuoto;
   const inizio = testo.indexOf('{');
   const fine = testo.lastIndexOf('}');
@@ -299,6 +368,8 @@ function analizzaJsonRiassunto(testo) {
       sintomi: typeof oggetto.sintomi === 'string' ? oggetto.sintomi : '',
       ipotesi: Array.isArray(oggetto.ipotesi) ? oggetto.ipotesi : [],
       azioni: Array.isArray(oggetto.azioni) ? oggetto.azioni : [],
+      fatto: typeof oggetto.fatto === 'string' ? oggetto.fatto.trim() : '',
+      esito: typeof oggetto.esito === 'string' ? oggetto.esito.trim() : '',
     };
   } catch {
     return vuoto;
@@ -357,6 +428,7 @@ function messaggioAGemini(m) {
   const parts = [];
   if (m.testo) parts.push({ text: m.testo });
   if (m.fotoB64) parts.push({ inlineData: { mimeType: 'image/jpeg', data: estraiBase64Puro(m.fotoB64) } });
+  if (m.fotoB64Extra) parts.push({ inlineData: { mimeType: 'image/jpeg', data: estraiBase64Puro(m.fotoB64Extra) } });
   return { role: m.ruolo === 'ai' ? 'model' : 'user', parts };
 }
 
@@ -396,13 +468,14 @@ async function chiamaOpenRouter(messaggi, imp, opzioni) {
 function messaggioAOpenAI(m) {
   const ruolo = m.ruolo === 'ai' ? 'assistant' : 'user';
   if (!m.fotoB64) return { role: ruolo, content: m.testo || '' };
-  return {
-    role: ruolo,
-    content: [
-      { type: 'text', text: m.testo || '' },
-      { type: 'image_url', image_url: { url: assicuraDataUri(m.fotoB64) } },
-    ],
-  };
+  const content = [
+    { type: 'text', text: m.testo || '' },
+    { type: 'image_url', image_url: { url: assicuraDataUri(m.fotoB64) } },
+  ];
+  if (m.fotoB64Extra) {
+    content.push({ type: 'image_url', image_url: { url: assicuraDataUri(m.fotoB64Extra) } });
+  }
+  return { role: ruolo, content };
 }
 
 // ---------- Utilità di rete ----------

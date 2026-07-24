@@ -10,10 +10,12 @@ import {
   osservaProblemi,
   creaProblema,
   aggiornaProblema,
+  aggiungiMessaggio,
 } from '../db.js';
 import { comprimiFoto, thumbnailDaDataUrl, latoMaggioreImmagine } from '../foto.js';
 import { generaSchedaCura, CAMPI_CURA } from '../ai.js';
 import { apriIdentificazione } from './identifica.js';
+import { apriHealthcheck } from './healthcheck.js';
 import { apriSceltaFoto } from './scegli-foto.js';
 import {
   vai,
@@ -27,14 +29,14 @@ import {
 } from '../util.js';
 
 export async function renderPianta(container, piantaId) {
-  container.innerHTML = `<p class="placeholder">Sto aprendo la scheda…</p>`;
+  container.innerHTML = `<p class="placeholder">Pianta in arrivo…</p>`;
 
   const pianta = await ottieniPianta(piantaId);
   if (!pianta) {
     container.innerHTML = `
       <div class="schermata-centrata">
         <p>Questa pianta non esiste più.</p>
-        <button class="btn btn-secondario" id="btn-torna">Torna al giardino</button>
+        <button class="btn btn-secondario" id="btn-torna">Torna all'elenco</button>
       </div>`;
     document.getElementById('btn-torna').addEventListener('click', () => vai('/'));
     return;
@@ -42,21 +44,23 @@ export async function renderPianta(container, piantaId) {
 
   container.innerHTML = `
     <header class="topbar">
-      <button class="link-indietro" id="btn-indietro">‹ Giardino</button>
+      <button class="link-indietro" id="btn-indietro">‹ Piante</button>
       <button class="icon-btn" id="btn-modifica" aria-label="Modifica pianta">✎</button>
     </header>
     <div class="sezione scheda-testata">
       <img class="scheda-testata__foto" id="foto-principale" src="${pianta.thumb || ''}" alt="${escapeHtml(pianta.nome)}"
         style="${pianta.thumb ? '' : 'display:none;'}" />
       <div class="scheda-testata__info">
-        <h1 id="pianta-nome">${escapeHtml(pianta.nome || '(senza nome)')}</h1>
+        <h1 id="pianta-nome">${escapeHtml(pianta.nome || '(da identificare)')}</h1>
         <p id="pianta-posizione" style="color:var(--testo-tenue); margin:0 0 0.5rem;">${escapeHtml(pianta.posizione || '')}</p>
         <div class="card-pianta__tags" id="pianta-tags">
           ${(pianta.tags || []).map((t) => `<span class="mini-chip">${escapeHtml(t)}</span>`).join('')}
         </div>
         ${pianta.annoArrivo ? `<p class="scheda-testata__anno">${escapeHtml(pianta.annoArrivo)}</p>` : ''}
-        <button class="btn btn-primario scheda-testata__nuovo" id="btn-nuovo-problema">＋ Nuovo problema</button>
       </div>
+    </div>
+    <div class="chiedi-olmo-sezione">
+      <button class="btn btn-primario chiedi-olmo-btn" id="btn-chiedi-olmo">🌿 Chiedi all'Olmo</button>
     </div>
     ${pianta.note ? `<div class="sezione"><p id="pianta-note" style="margin:0;">${escapeHtml(pianta.note)}</p></div>` : ''}
 
@@ -66,19 +70,24 @@ export async function renderPianta(container, piantaId) {
     </div>
 
     <div class="sezione">
-      <h2 style="font-size:1rem; margin:0;">Storico</h2>
+      <h2 style="font-size:1rem; margin:0;">Storia</h2>
       <div class="elenco-problemi" id="elenco-problemi" style="margin-top:0.7rem;"><p class="placeholder">Carico lo storico…</p></div>
     </div>
 
     <div class="sezione">
-      <h2 style="font-size:1rem; margin:0;">Scheda di cura</h2>
+      <h2 style="font-size:1rem; margin:0;">Info e cura</h2>
       <div id="scheda-cura" style="margin-top:0.7rem;"></div>
     </div>
   `;
 
+  // Stato locale per le foto e i problemi (aggiornati dagli observer, letti dal bottone)
+  let fotoCorrente = [];
+  let problemiCorrente = [];
+
   document.getElementById('btn-indietro').addEventListener('click', () => vai('/'));
   document.getElementById('btn-modifica').addEventListener('click', () => apriModaleModificaPianta(pianta));
-  document.getElementById('btn-nuovo-problema').addEventListener('click', () => apriModaleNuovoProblema(piantaId));
+  document.getElementById('btn-chiedi-olmo').addEventListener('click', () =>
+    apriChiediAllOlmo(pianta, piantaId, fotoCorrente, problemiCorrente));
 
   disegnaSchedaCura(pianta);
 
@@ -86,6 +95,7 @@ export async function renderPianta(container, piantaId) {
   const unsubFoto = osservaFoto(
     piantaId,
     (foto) => {
+      fotoCorrente = foto;
       disegnaAlbum(pianta, foto);
       // In testata la foto va mostrata in qualità piena (la thumbnail
       // sgranerebbe): appena l'album arriva, si passa alla prima foto vera.
@@ -106,7 +116,10 @@ export async function renderPianta(container, piantaId) {
   );
   const unsubProblemi = osservaProblemi(
     piantaId,
-    (problemi) => disegnaProblemi(piantaId, problemi),
+    (problemi) => {
+      problemiCorrente = problemi;
+      disegnaProblemi(piantaId, problemi);
+    },
     (errore) => mostraErrore('Non riesco a caricare i problemi: ' + errore.message)
   );
 
@@ -159,9 +172,9 @@ function disegnaAlbum(pianta, foto) {
             fotoPrincipale.style.display = '';
           }
         }
-        mostraInfo('Foto aggiunta.');
+        mostraInfo('Foto aggiunta!');
       } catch (errore) {
-        mostraErrore('Non sono riuscita a salvare la foto: ' + errore.message);
+        mostraErrore('Non sono riuscito a salvare la foto: ' + errore.message);
       }
     });
   });
@@ -184,7 +197,7 @@ function disegnaAlbum(pianta, foto) {
         }
         mostraInfo('Copertina aggiornata.');
       } catch (errore) {
-        mostraErrore('Non sono riuscita a cambiare la copertina: ' + errore.message);
+        mostraErrore('Non sono riuscito a cambiare la copertina: ' + errore.message);
       } finally {
         btn.disabled = false;
       }
@@ -237,7 +250,7 @@ function apriAzioniFoto(pianta, fotoId, fotoB64) {
   overlay.querySelector('#af-elimina').addEventListener('click', () => {
     if (!confirm('Eliminare questa foto?')) return;
     overlay.remove();
-    eliminaFoto(pianta.id, fotoId).catch((e) => mostraErrore('Non sono riuscita a eliminare la foto: ' + e.message));
+    eliminaFoto(pianta.id, fotoId).catch((e) => mostraErrore('Non sono riuscito a eliminare la foto: ' + e.message));
   });
 }
 
@@ -280,7 +293,7 @@ function disegnaProblemi(piantaId, problemi) {
         mostraInfo('Problema riaperto: raccontami cosa è cambiato.');
         vai(`/problema/${piantaId}/${btn.dataset.riapri}`);
       } catch (errore) {
-        mostraErrore('Non sono riuscita a riaprire il problema: ' + errore.message);
+        mostraErrore('Non sono riuscito a riaprire il problema: ' + errore.message);
       }
     });
   });
@@ -352,7 +365,7 @@ async function generaCuraConAI(pianta, testoIncollato) {
     // La scheda NON si salva da sola: appare nel modulo e la salvi tu (giudizio umano sempre in mezzo).
     apriModaleCura(pianta, { ...scheda, fonte: pianta.cura?.fonte || '' });
   } catch (errore) {
-    mostraErrore('Non sono riuscita a preparare la scheda: ' + errore.message);
+    mostraErrore('Non sono riuscito a preparare la scheda: ' + errore.message);
   }
 }
 
@@ -435,7 +448,7 @@ function apriModaleCura(pianta, valori) {
     } catch (errore) {
       pulsante.disabled = false;
       pulsante.textContent = 'Salva scheda';
-      mostraErrore('Non sono riuscita a salvare la scheda: ' + errore.message);
+      mostraErrore('Non sono riuscito a salvare la scheda: ' + errore.message);
     }
   });
 }
@@ -511,7 +524,7 @@ function apriModaleModificaPianta(pianta) {
       mostraInfo('Pianta eliminata.');
       vai('/');
     } catch (errore) {
-      mostraErrore('Non sono riuscita a eliminare la pianta: ' + errore.message);
+      mostraErrore('Non sono riuscito a eliminare la pianta: ' + errore.message);
     }
   });
 
@@ -537,10 +550,89 @@ function apriModaleModificaPianta(pianta) {
     } catch (errore) {
       pulsante.disabled = false;
       pulsante.textContent = 'Salva modifiche';
-      mostraErrore('Non sono riuscita a salvare: ' + errore.message);
+      mostraErrore('Non sono riuscito a salvare: ' + errore.message);
     }
   });
 }
+
+// ---------- Overlay "Chiedi all'Olmo" (tre porte) ----------
+
+function apriChiediAllOlmo(pianta, piantaId, fotoAlbum, problemi) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="foglio">
+      <h2>Chiedi all'Olmo</h2>
+      <div class="chiedi-olmo-porte">
+        <button type="button" class="chiedi-olmo-porta" id="co-healthcheck">
+          <span class="chiedi-olmo-porta__icona">🌿</span>
+          <span class="chiedi-olmo-porta__testo"><strong>Diamo un'occhiata</strong><small>Scatta una foto e l'AI ti dice cosa nota</small></span>
+        </button>
+        <button type="button" class="chiedi-olmo-porta" id="co-identifica">
+          <span class="chiedi-olmo-porta__icona">🔍</span>
+          <span class="chiedi-olmo-porta__testo"><strong>Che pianta è?</strong><small>Identifica la pianta da una foto</small></span>
+        </button>
+        <button type="button" class="chiedi-olmo-porta" id="co-problema">
+          <span class="chiedi-olmo-porta__icona">🩺</span>
+          <span class="chiedi-olmo-porta__testo"><strong>C'è un problema</strong><small>Apri una conversazione per capire cosa succede</small></span>
+        </button>
+      </div>
+      <button type="button" class="btn btn-secondario btn-blocco" id="co-annulla">Annulla</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#co-annulla').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#co-healthcheck').addEventListener('click', () => {
+    overlay.remove();
+    apriHealthcheck(pianta, fotoAlbum, problemi, (rispostaAI) => {
+      apriProblemaDaHealthcheck(piantaId, rispostaAI);
+    });
+  });
+
+  overlay.querySelector('#co-identifica').addEventListener('click', () => {
+    overlay.remove();
+    apriSceltaFoto(async (file) => {
+      let fotoB64;
+      try {
+        fotoB64 = await comprimiFoto(file);
+      } catch (errore) {
+        mostraErrore('Non sono riuscito a leggere la foto: ' + errore.message);
+        return;
+      }
+      apriIdentificazione(fotoB64, (candidata) => {
+        apriModaleModificaPianta({
+          ...pianta,
+          nome: candidata.nome,
+          nomeScientifico: candidata.nomeScientifico || pianta.nomeScientifico || '',
+        });
+        mostraInfo('Nome proposto: controlla e salva tu.');
+      });
+    });
+  });
+
+  overlay.querySelector('#co-problema').addEventListener('click', () => {
+    overlay.remove();
+    apriModaleNuovoProblema(piantaId);
+  });
+}
+
+async function apriProblemaDaHealthcheck(piantaId, rispostaAI) {
+  try {
+    const titolo = `Check-up del ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`;
+    const id = await creaProblema(piantaId, { titolo });
+    await aggiungiMessaggio(piantaId, id, {
+      ruolo: 'utente',
+      testo: `Dal check-up è emerso questo:\n\n${rispostaAI}\n\nVorrei approfondire.`,
+    });
+    vai(`/problema/${piantaId}/${id}`);
+  } catch (errore) {
+    mostraErrore('Non sono riuscito ad aprire il problema: ' + errore.message);
+  }
+}
+
+// ---------- Modale "Nuovo problema" ----------
 
 function apriModaleNuovoProblema(piantaId) {
   const overlay = document.createElement('div');
@@ -582,7 +674,7 @@ function apriModaleNuovoProblema(piantaId) {
     } catch (errore) {
       pulsante.disabled = false;
       pulsante.textContent = 'Apri conversazione';
-      mostraErrore('Non sono riuscita ad aprire il problema: ' + errore.message);
+      mostraErrore('Non sono riuscito ad aprire il problema: ' + errore.message);
     }
   });
 }
